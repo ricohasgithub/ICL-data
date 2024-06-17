@@ -193,5 +193,4 @@ class Transformer(nn.Module):
 
         x = F.relu(self.lin1(x))
         x = F.relu(self.lin2(x))
-        logits = F.softmax(self.lin3(x))
-        return logits
+        return self.lin3(x)
