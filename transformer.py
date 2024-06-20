@@ -1,9 +1,37 @@
 
 import math
+import random
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+class SequenceEmbedder(nn.Module):
+
+    '''
+        P = one-hot positional embedding dimension
+        D = embedding dimension for items/labels
+        N = sequence length
+    '''
+    def __init__(self, P, D, N):
+        self.P = P
+        self.D = D
+        self.N = N
+    
+    # examples and labels each has shape (batch_size, sequence_length, D) 
+    def forward(self, examples, labels, is_training=True):
+
+        batch_size, N, D = examples.size()
+        pos_encoding = torch.zeros(batch_size, 2*N+1, self.P)
+
+        start_index = random.randint(0, self.P - (2*N + 1))
+        one_hot_indices = torch.arange(start_index, start_index + (2*N+1))
+        pos_encoding.scatter_(2, one_hot_indices.unsqueeze(2), 1)
+
+        interleaved = torch.empty((batch_size, 2*N+1, D), dtype=examples.dtype)
+        interleaved[:, 0::2] = examples
+        interleaved[:, 1::2] = labels[:, :-1]
+        return torch.cat((pos_encoding, interleaved), dim=2)
 
 class LayerNorm(nn.Module):
     "Code from: https://nlp.seas.harvard.edu/annotated-transformer/"
@@ -141,7 +169,7 @@ class TransformerBlock(nn.Module):
 
 class Transformer(nn.Module):
 
-    def __init__(self, n_classes, n_layers=2, n_heads=8, p_dropout=0.0, d_hidden=128):
+    def __init__(self, P, D, N, n_classes, n_layers=2, n_heads=1, p_dropout=0.0, d_hidden=128):
         super(Transformer, self).__init__()
 
         self.device = torch.device(
@@ -155,6 +183,8 @@ class Transformer(nn.Module):
         self.n_heads = n_heads
         self.p_dropout = p_dropout
         self.d_hidden = d_hidden
+
+        self.input_embedder = SequenceEmbedder(P, D, N)
 
         self.layer_norm = LayerNorm(self.d_hidden)
         for i in range(self.n_layers):
