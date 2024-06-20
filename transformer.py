@@ -169,7 +169,7 @@ class TransformerBlock(nn.Module):
 
 class Transformer(nn.Module):
 
-    def __init__(self, P, D, N, n_classes, n_layers=2, n_heads=1, p_dropout=0.0, d_hidden=128):
+    def __init__(self, input_embedder, n_classes, n_layers=2, n_heads=1, p_dropout=0.0, d_hidden=128):
         super(Transformer, self).__init__()
 
         self.device = torch.device(
@@ -184,7 +184,7 @@ class Transformer(nn.Module):
         self.p_dropout = p_dropout
         self.d_hidden = d_hidden
 
-        self.input_embedder = SequenceEmbedder(P, D, N)
+        self.input_embedder = input_embedder
 
         self.layer_norm = LayerNorm(self.d_hidden)
         for i in range(self.n_layers):
