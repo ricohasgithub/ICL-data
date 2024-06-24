@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
 
-from data import _convert_dict
+from data_old import _convert_dict
 
 
 class IterDataset(torch.utils.data.IterableDataset):

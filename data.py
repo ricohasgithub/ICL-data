@@ -1,328 +1,205 @@
-import random
-import logging
-import torch
-import torchvision
-import torchvision.transforms as transforms
-from torchvision.datasets import Omniglot
-from torch.utils.data import DataLoader
 import numpy as np
-from collections import defaultdict
-from torch.utils.data import Dataset
+import matplotlib.pyplot as plt
+import torch
 
-IMAGE_SIZE = 105
-N_CHARACTER_CLASSES = 1623
-N_EXEMPLARS_PER_CLASS = 20
+# Input sequence design
 
+# S is size of training set
 
-class GaussianVectorGenerator:
-    def __init__(self, num_classes, num_labels, input_dim, noise_param=0.75):
-        self.input_dim = input_dim
-        self.num_classes = num_classes
-        self.num_labels = num_labels
-        self.class_center_mean = np.zeros(shape=(input_dim))
-        self.class_center_var = (1 / input_dim) * np.identity(input_dim)
+# N is number of sample-label pairs in the input sequence
 
-        # Generate ranodm c
-        self.class_means = np.stack(
-            [
-                np.random.multivariate_normal(
-                    self.class_center_mean, self.class_center_var
-                )
-                for _ in range(num_classes)
-            ],
-            axis=0,
-        )
+# K is the number of possible labels
 
-        self.class_labels = np.stack(
-            [
-                np.random.multivariate_normal(
-                    self.class_center_mean, self.class_center_var
-                )
-                for _ in range(num_labels)
-            ],
-            axis=0,
-        )
+# D is the dimensionality of the samples and labels.
 
-        self.noise_param = noise_param  # epsilon for in
+# B is burstiness, which controls how many copies of the target are present in the input. N has to be divisible by B. B = 0 chooses randomly.
 
-        self.classes_for = [[] for _ in range(num_labels)]
+# p_B is the fraction of bursty sequences.
 
-        self.label_to_class = [[] for _ in range(num_labels)]
+# P is the probability distribution that a particular label is chosen as the target.
+# By default, this is uniform across the K labels.
 
-        for class_num in range(num_classes):
-            self.label_to_class[class_num % num_labels].append(class_num)
-
-    def generateVectors(self, class_num, num=1, new_classes=False, new_labels=False):
-
-        class_centers = self.class_means
-        class_labels = self.class_labels
-        if new_classes:
-            class_centers = np.stack(
-                [
-                    np.random.multivariate_normal(
-                        self.class_center_mean, self.class_center_var
-                    )
-                    for _ in range(self.num_classes)
-                ],
-                axis=0,
-            )
-
-        if new_labels:
-            class_labels = np.stack(
-                [
-                    np.random.multivariate_normal(
-                        self.class_center_mean, self.class_center_var
-                    )
-                    for _ in range(self.num_labels)
-                ],
-                axis=0,
-            )
-
-        class_center = class_centers[class_num].reshape(self.input_dim, 1)
-        noise_vectors = self.noise_param * np.random.multivariate_normal(
-            self.class_center_mean, self.class_center_var, size=num
-        )
-
-        noise_vectors = np.transpose(noise_vectors, axes=[1, 0])
-
-        class_vector = (class_center + noise_vectors) * (
-            1 / np.sqrt(1 + self.noise_param**2)
-        )
-
-        class_label = class_labels[class_num % self.num_labels]
-
-        return class_vector, class_label
-
-    def get_class_centers(self, num=1):
-        return np.random.multivariate_normal(
-            self.class_center_mean, self.class_center_var, size=num
-        )
+# The input dimension is 2*N + 1 + D
 
 
-class SeqGenerator:
-    """Generates sequences of 'common', 'rare', or Zipf-distributed classes."""
+def get_mus_label_class(K, L, D):
 
-    def __init__(
-        self,
-        num_classes=1024,  # K
-        num_labels=32,  # L
-        input_dim=63,  # D
-        seq_len=8,  # N
-        noise_param=0.75,  # e
-        zipf_exp=0,
-    ):
-        self.seq_len = seq_len
-        self.input_dim = input_dim
-        self.num_labels = num_labels
-        self.data_generator = GaussianVectorGenerator(
-            num_classes, num_labels, input_dim, noise_param
-        )
+    mus_label = np.random.normal(size=(L, D)) / np.sqrt(D)
+    mus_class = np.random.normal(size=(K, D)) / np.sqrt(D)
+    if K < L or K % L != 0:
+        print("K > L and K%L == 0 is required")
+        return 0
+    labels_class = np.tile(np.arange(L), int(K / L))
 
-        zipfian_dist = np.power(np.arange(num_labels), -zipf_exp)
-        zipfian_dist = zipfian_dist / np.sum(zipfian_dist)
-
-        self.random_label_prob = zipfian_dist
-
-    def generate_train_seq(self, p_bursty=1, burst_num=1):
-        while True:
-            if np.random.rand() < p_bursty:
-                yield self.get_bursty_seq(burst_num)
-            else:
-                yield self.get_random_seq()
-
-    def generate_icl_seq(self, burst_num=1, mode="icl1"):
-        while True:
-            yield self.get_bursty_seq(burst_num, mode)
-
-    def generate_iwl_seq(self):
-        while True:
-            yield self.get_random_seq(iwl=True)
-
-    def get_bursty_seq(self, burst_num=1, mode="train"):  # B  # "train", "icl1", "icl2"
-
-        assert (self.seq_len % burst_num) == 0
-
-        num_label_in_seq = self.seq_len // burst_num
-
-        label_indices = np.repeat(np.arange(num_label_in_seq), burst_num)
-
-        np.random.shuffle(label_indices)
-
-        context_label_inds = np.random.choice(
-            len(self.data_generator.class_labels), size=num_label_in_seq, replace=False
-        )
-
-        context = np.zeros((self.data_generator.input_dim, self.seq_len))
-        context_labels = np.zeros((self.data_generator.input_dim, self.seq_len))
-
-        context_classes = np.zeros(self.seq_len)
-
-        for label_ind in range(num_label_in_seq):
-
-            label_num = context_label_inds[label_ind]
-
-            classes_for_label = np.random.choice(
-                self.data_generator.label_to_class[label_num], burst_num
-            )
-
-            label_vectors = np.zeros((self.data_generator.input_dim, burst_num))
-
-            class_label = None
-            for class_num in np.unique(classes_for_label):
-
-                if mode == "icl1":
-                    class_vectors, cur_class_label = (
-                        self.data_generator.generateVectors(
-                            class_num,
-                            num=np.sum(classes_for_label == class_num),
-                            new_classes=True,
-                        )
-                    )
-                elif mode == "icl2":
-                    class_vectors, cur_class_label = (
-                        self.data_generator.generateVectors(
-                            class_num,
-                            num=np.sum(classes_for_label == class_num),
-                            new_classes=True,
-                            new_labels=True,
-                        )
-                    )
-                else:
-                    class_vectors, cur_class_label = (
-                        self.data_generator.generateVectors(
-                            class_num, num=np.sum(classes_for_label == class_num)
-                        )
-                    )
-
-                class_label = cur_class_label
-                label_vectors[:, classes_for_label == class_num] = class_vectors
-
-            context_labels[:, label_indices == label_ind] = class_label.reshape(
-                self.input_dim, 1
-            )
-
-            context_classes[label_indices == label_ind] = classes_for_label
-            context[:, label_indices == label_ind] = label_vectors
-
-        query_class = np.random.choice(np.unique(context_classes))
-        query_class = int(query_class)
-
-        if mode == "icl1":
-            query_vector, _ = self.data_generator.generateVectors(
-                query_class, new_classes=True
-            )
-
-            query_label = np.unique(
-                context_labels[:, context_classes == query_class], axis=1
-            )
-        elif mode == "icl2":
-            query_vector, _ = self.data_generator.generateVectors(
-                query_class, new_classes=True, new_labels=True
-            )
-            query_label = np.unique(
-                context_labels[:, context_classes == query_class], axis=1
-            )
-        else:
-            query_vector, query_label = self.data_generator.generateVectors(query_class)
-
-        query_label_ind = context_label_inds[
-            np.unique(label_indices[context_classes == query_class])
-        ]
-        return (
-            context,
-            context_labels,
-            context_label_inds[label_indices],
-            query_vector,
-            query_label.reshape(self.input_dim, 1),
-            query_label_ind,
-        )
-
-    def get_random_seq(self, iwl=False):
-        context_label_inds = np.random.choice(
-            np.arange(self.num_labels), self.seq_len, p=self.random_label_prob
-        )
-        context_classes = np.zeros(self.seq_len)
-        for label_num in np.unique(context_label_inds):
-            classes_for_label = np.random.choice(
-                self.data_generator.label_to_class[label_num],
-                np.sum(context_label_inds == label_num),
-            )
-
-            context_classes[context_label_inds == label_num] = classes_for_label
-
-        context = np.zeros((self.data_generator.input_dim, self.seq_len))
-        context_labels = np.zeros((self.data_generator.input_dim, self.seq_len))
-
-        for class_num in np.unique(context_classes):
-            class_vectors, class_label = self.data_generator.generateVectors(
-                int(class_num), num=np.sum(context_classes == class_num)
-            )
-
-            context[:, context_classes == class_num] = class_vectors
-            context_labels[:, context_classes == class_num] = class_label.reshape(
-                self.input_dim, 1
-            )
-
-        if iwl:
-            query_label_ind = np.random.choice(
-                np.arange(self.num_labels), p=self.random_label_prob
-            )
-            query_class = np.random.choice(
-                self.data_generator.label_to_class[query_label_ind]
-            )
-            query_label_ind = [query_label_ind]
-        else:
-            query_class = np.random.choice(np.unique(context_classes))
-            query_label_ind = np.unique(
-                context_label_inds[context_classes == query_class]
-            )
-
-        query_class = int(query_class)
-        query_vector, query_label = self.data_generator.generateVectors(query_class)
-
-        return (
-            context,
-            context_labels,
-            context_label_inds,
-            query_vector,
-            query_label.reshape(self.input_dim, 1),
-            query_label_ind,
-        )
+    return mus_label, mus_class, labels_class
 
 
-def _convert_dict(
-    example, use_constant_labels=False, interleave_targets=True, downsample=False
+def generate_targets_only(mus_label, mus_class, labels_class, S, eps=0.1, P=None):
+    e_fac = 1 / np.sqrt(1 + eps**2)
+
+    L = mus_label.shape[0]
+    K = mus_class.shape[0]
+    D = mus_label.shape[1]
+
+    inputs = np.ones((S, D))
+
+    if P is None or len(P) != K:
+        P = np.ones(K) / K
+
+    targets = np.random.choice(K, size=S, p=P)
+
+    inputs = e_fac * (
+        mus_class[targets] + eps * np.random.normal(size=(S, D)) / np.sqrt(D)
+    )
+
+    labels = np.zeros((S, L), dtype=bool)
+
+    for s in range(S):
+        labels[s, labels_class[targets[s]]] = True
+
+    return torch.tensor(inputs), torch.tensor(labels)
+
+
+def generate_input_seqs(
+    mus_label,
+    mus_class,
+    labels_class,
+    S,
+    N,
+    Nmax,
+    eps=0.1,
+    B=0,
+    p_B=0,
+    P=None,
+    p_C=0,
+    flip_labels=False,
+    output_target_labels=False,
+    no_repeats=False,
 ):
-    # (dims: B:batch, SS:original seqlen, H:height, W:width, C:channels)
-    is_image = len(example["example"].shape) == 5
-    is_vector = len(example["example"].shape) == 4
+    e_fac = 1 / np.sqrt(1 + eps**2)
 
-    # Cast the examples into the correct shape and tf datatype.
-    if is_image or is_vector:
-        examples = example["example"].type(torch.float)  # (B,SS,H,W,C)
-        # if downsample:
-        #     examples = tf.map_fn(
-        #         lambda batch: tf.image.resize(batch, [28, 28]), examples
-        #     )
+    L = mus_label.shape[0]
+    K = mus_class.shape[0]
+    D = mus_label.shape[1]
+
+    K_c = 128
+    mus_class_new = np.random.normal(size=(K_c, D)) / np.sqrt(D)
+
+    if K_c < L or K_c % L != 0:
+        print("K > L and K%L == 0 is required")
+        return 0
+    labels_class_new = np.tile(np.arange(L), int(K_c / L))
+
+    inputs = np.zeros((S, 2 * N + 1, 2 * Nmax + 1 + D))
+
+    if P is None or len(P) != K:
+        P = np.ones(K) / K
+
+    # N has to be divisible by B as we will have N/B copies of each label in the context.
+    if (B > 0 and N % B != 0) or B >= N:
+        print("N is not divisible by B or N/B is not even or B >= N")
+        return 0, 0
+
+    if B == 0:
+        B = int(N / 2)
+        p_B = 0
+
+    choices = np.zeros((S, int(N / B)), dtype=int)
+    if no_repeats:
+        for s in range(S):
+            label_choices = np.random.choice(
+                np.arange(L), size=(int(N / B)), replace=False
+            )
+            pos_choices = np.random.choice(np.arange(int(K / L)), size=(int(N / B)))
+            choices[s] = pos_choices * L + label_choices
     else:
-        examples = example["example"].type(torch.int32)  # (B, SS)
+        choices = np.random.choice(np.arange(K), size=(S, int(N / B)), p=P)
+    choices = np.tile(choices, B)
+    [np.random.shuffle(x) for x in choices]
 
-    # Cast the labels into the correct tf datatype.
-    if use_constant_labels:
-        labels = torch.ones_like(example["label"], dtype=torch.int32)
+    choices_c = np.zeros((S, int(N / B)), dtype=int)
+    if no_repeats:
+        for s in range(S):
+            label_choices = np.random.choice(
+                np.arange(L), size=(int(N / B)), replace=False
+            )
+            pos_choices = np.random.choice(np.arange(int(K_c / L)), size=(int(N / B)))
+            choices_c[s] = pos_choices * L + label_choices
+            # print(choices_c[s], labels_class_new[choices_c[s]],label_choices, pos_choices)
     else:
-        labels = example["label"].type(torch.int32)  # (B,SS)
-    seq_len = labels.shape[-1]
+        choices_c = np.random.choice(np.arange(K_c), size=(S, int(N / B)))
+    choices_c = np.tile(choices_c, B)
+    [np.random.shuffle(x) for x in choices_c]
 
-    # Create the target sequence.
-    if interleave_targets:
-        # Alternating labels with zeros, e.g. [label, 0, label, 0, ...].
-        zeros = torch.zeros_like(labels)
-        target = torch.stack((labels[..., None], zeros[..., None]), axis=-1)
-        target = torch.reshape(target, [-1, seq_len * 2])[:, :-1]  # (B,SS*2-1)
+    targets_ind = np.random.choice(choices.shape[1], size=(choices.shape[0],))
+    targets = choices[np.arange(choices.shape[0]), targets_ind]
+
+    targets_c_ind = np.random.choice(choices_c.shape[1], size=(choices_c.shape[0],))
+    targets_c = choices_c[np.arange(choices_c.shape[0]), targets_c_ind]
+
+    filt_B = np.random.uniform(size=S) > p_B
+
+    choices[filt_B] = np.random.choice(K, size=(np.sum(filt_B), N), p=P)
+    targets[filt_B] = np.random.choice(K, size=(np.sum(filt_B),), p=P)
+
+    filt_C = np.random.uniform(size=S) > p_C
+
+    # print(np.arange(S)[~filt_C])
+    # print(np.arange(S)[~filt_B])
+
+    inputs[filt_C, :-1:2, 2 * Nmax + 1 :] = (
+        e_fac
+        * (mus_class[choices] + eps * np.random.normal(size=(S, N, D)) / np.sqrt(D))
+    )[filt_C]
+
+    if flip_labels:
+        wrong_label = (labels_class + 1) % L
+        inputs[filt_C, 1:-1:2, 2 * Nmax + 1 :] = ((mus_label[wrong_label])[choices])[
+            filt_C
+        ]
     else:
-        # Just use the original sequence of labels, e.g. [label, label, ...]
-        target = labels  # (B,SS)
+        inputs[filt_C, 1:-1:2, 2 * Nmax + 1 :] = ((mus_label[labels_class])[choices])[
+            filt_C
+        ]
 
-    ret_dict = {"examples": examples, "labels": labels, "target": target}
-    return ret_dict
+    inputs[filt_C, -1, 2 * Nmax + 1 :] = (
+        (
+            e_fac
+            * (mus_class[targets] + eps * np.random.normal(size=(S, D)) / np.sqrt(D))
+        )
+    )[filt_C]
+
+    inputs[~filt_C, :-1:2, 2 * Nmax + 1 :] = (
+        e_fac
+        * (
+            mus_class_new[choices_c]
+            + eps * np.random.normal(size=(S, N, D)) / np.sqrt(D)
+        )
+    )[~filt_C]
+    inputs[~filt_C, 1:-1:2, 2 * Nmax + 1 :] = (
+        (mus_label[labels_class_new])[choices_c]
+    )[~filt_C]
+    inputs[~filt_C, -1, 2 * Nmax + 1 :] = (
+        e_fac
+        * (mus_class_new[targets_c] + eps * np.random.normal(size=(S, D)) / np.sqrt(D))
+    )[~filt_C]
+
+    shifts = np.random.choice((2 * Nmax + 1) - (2 * N + 1) + 1, size=(S))
+
+    labels = np.zeros((S, L), dtype=bool)
+    target_classes = np.zeros(S, dtype=int)
+
+    for s in range(S):
+        if filt_C[s]:
+            labels[s, labels_class[targets[s]]] = True
+            target_classes[s] = targets[s]
+        else:
+            labels[s, labels_class_new[targets_c[s]]] = True
+            target_classes[s] = -1
+
+        inputs[s, :, shifts[s] : shifts[s] + 2 * N + 1] = np.identity(2 * N + 1)
+
+    if output_target_labels:
+        return np.array(inputs), torch.tensor(labels), target_classes
+    else:
+        return torch.tensor(inputs), torch.tensor(labels)

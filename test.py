@@ -1,4 +1,4 @@
-from data import SeqGenerator
+from data_old import SeqGenerator
 from util import seq_vis
 import numpy as np
 

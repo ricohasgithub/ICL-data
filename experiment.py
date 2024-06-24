@@ -1,7 +1,7 @@
 import sys
 
 from train import Trainer
-from data import SeqGenerator, GaussianVectorGenerator
+from data_old import SeqGenerator, GaussianVectorGenerator
 
 from transformer import Transformer, SequenceEmbedder
 
