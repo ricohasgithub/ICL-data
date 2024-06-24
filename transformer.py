@@ -169,7 +169,7 @@ class TransformerBlock(nn.Module):
 
 class Transformer(nn.Module):
 
-    def __init__(self, input_embedder, n_classes, n_layers=2, n_heads=1, p_dropout=0.0, d_hidden=128):
+    def __init__(self, n_classes, n_layers=2, n_heads=1, p_dropout=0.0, d_hidden=128):
         super(Transformer, self).__init__()
 
         self.device = torch.device(
@@ -183,8 +183,6 @@ class Transformer(nn.Module):
         self.n_heads = n_heads
         self.p_dropout = p_dropout
         self.d_hidden = d_hidden
-
-        self.input_embedder = input_embedder
 
         self.layer_norm = LayerNorm(self.d_hidden)
         for i in range(self.n_layers):
@@ -204,8 +202,7 @@ class Transformer(nn.Module):
         self.lin2 = nn.Linear(d_hidden, d_hidden)
         self.lin3 = nn.Linear(d_hidden, n_classes)
 
-    def forward(self, examples, labels, mask=None, is_training=True):
-        x = self.input_embedder(examples, labels, is_training).to(self.device)
+    def forward(self, x, mask=None, is_training=True):
 
         if mask is not None:
             attention_mask = mask[:, None, None, :]
