@@ -28,9 +28,9 @@ alpha = 0.01
 P = 1.0/(np.arange(1,K+1)**alpha)
 P /= np.sum(P)
 
-B = int(sys.argv[5])
-p_B = float(sys.argv[6])
-p_C = float(sys.argv[7])
+B = 1
+p_B = 0.5
+p_C = 0
 
 batchsize = 32
 no_repeats = False
@@ -56,10 +56,10 @@ def accuracy(model, inputs, labels, mask=None, flip_labels=False):
     correct = (label_preds_inds == label_inds).float()
     return correct.mean().item()
 
-model = Transformer()
+model = Transformer(L)
 optim = optim.SGD(model.parameters())
 
-for epoch in epochs:
+for epoch in range(epochs):
 
     optim.zero_grad()
     mus_label, mus_class, labels_class = get_mus_label_class(K,L,D)

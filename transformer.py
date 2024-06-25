@@ -190,7 +190,6 @@ class Transformer(nn.Module):
                 self,
                 f"transformer_block_{i}",
                 TransformerBlock(
-                    causal=True,
                     widening_factor=4,
                     n_heads=self.n_heads,
                     d_hidden=self.d_hidden,
