@@ -1,5 +1,6 @@
 
 import sys
+import wandb
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,6 +12,11 @@ import torch.nn.functional as F
 
 from data import get_mus_label_class, generate_input_seqs
 from transformer import Transformer
+
+wandb.init(
+    # Set the wandb project where this run will be logged
+    project="icl-data",
+)
 
 def plot_grad_flow(named_parameters):
     
@@ -105,6 +111,7 @@ for epoch in range(epochs):
     optim.step()
 
     print(f"Epoch: {epoch}, Loss: {loss.item()}")
+    wandb.log({"epoch": epoch, "train_loss": loss})
 
     if epoch % 10 == 0:
         acc_test = accuracy(model, test_inputs, test_labels)
@@ -112,5 +119,6 @@ for epoch in range(epochs):
         acc_ic2 = accuracy(model, test_inputs_ic2, test_labels_ic2, flip_labels = True)
         acc_iw = accuracy(model, test_inputs_iw, test_labels_iw)
         print(f"Test acc: {acc_test}, IC acc: {acc_ic}, IC acc2: {acc_ic2}, IW acc: {acc_iw}")
+        wandb.log({"eval_epoch": epoch, "test_acc": acc_test, "ic1_acc": acc_ic, "ic2_acc": acc_ic2, "iw_acc": acc_iw})
 
 plt.savefig("./grads.png")
