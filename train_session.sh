@@ -19,6 +19,6 @@ for (( i=0; i<$NUM_MODELS; i++ )); do
     LEARNING_RATE=${LEARNING_RATES[$i]}
     MODEL_TYPE=${MODEL_TYPES[$i]}
     
-    echo "Training $MODEL_TYPE with epochs=$EPOCH, batch_size=$BATCH_SIZE, learning_rate=$LEARNING_RATE"
-    python3 train.py --epochs $EPOCH --batch_size $BATCH_SIZE --learning_rate $LEARNING_RATE --model_type $MODEL_TYPE --output_dir $OUTPUT_DIR
+    echo "Training $MODEL_TYPE with epochs=$EPOCH, batch_size=$BATCH_SIZE, learning_rate=$LEARNING_RATE", run_name=$RUN_NAME
+    python3 train.py --epochs $EPOCH --batch_size $BATCH_SIZE --learning_rate $LEARNING_RATE --model_type $MODEL_TYPE --run_name $RUN_NAME
 done
