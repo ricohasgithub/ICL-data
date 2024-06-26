@@ -2,10 +2,23 @@
 
 # Define arrays of different parameter values
 RUN_NAME="K_session" # Name of the session by independent variable
-EPOCHS=(10 20 30)
-BATCH_SIZES=(32 64 128)
-LEARNING_RATES=(0.001 0.0005 0.0001)
-MODEL_TYPES=("resnet" "cnn" "lstm")
+EPOCHS_=(10 20 30)
+K_=(512 1024 2048)
+L_=(32 32 32)
+S_=(10000 10000 10000)
+N_=(8 8 8)
+NMAX_=(32 32 32)
+EPS_=(0.1 0.1 0.1)
+
+ALPHA_=(0.0 0.0 0.0)
+B_=(1 1 1)
+
+PB_=(1.0 1.0 1.0)
+PC_=(0.8 0.8 0.8)
+
+BATCHSIZE_=(128 128 128)
+NOREPEATS_=(false false false)
+
 
 NUM_MODELS=${#EPOCHS[@]}
 OUTPUT_DIR="./sessions/$RUN_NAME"
@@ -14,11 +27,20 @@ mkdir -p $OUTPUT_DIR
 
 # Loop over the indices of the arrays
 for (( i=0; i<$NUM_MODELS; i++ )); do
-    EPOCH=${EPOCHS[$i]}
-    BATCH_SIZE=${BATCH_SIZES[$i]}
-    LEARNING_RATE=${LEARNING_RATES[$i]}
-    MODEL_TYPE=${MODEL_TYPES[$i]}
+    EPOCHS=${EPOCHS_[$i]}
+    K=${K_[$i]}
+    L=${L_[$i]}
+    S=${S_[$i]}
+    N=${N_[$i]}
+    NMAX=${NMAX_[$i]}
+    EPS=${EPS_[$i]}
+    ALPHA=${ALPHA_[$i]}
+    B=${B_[$i]}
+    PB=${PB_[$i]}
+    PC=${PC_[$i]}
+    BATCHSIZE=${BATCHSIZE_[$i]}
+    NOREPEATS=${NOREPEATS_[$i]}
     
-    echo "Training $MODEL_TYPE with epochs=$EPOCH, batch_size=$BATCH_SIZE, learning_rate=$LEARNING_RATE", run_name=$RUN_NAME
-    python3 train.py --epochs $EPOCH --batch_size $BATCH_SIZE --learning_rate $LEARNING_RATE --model_type $MODEL_TYPE --run_name $RUN_NAME
+    echo "Training model with EPOCHS=$EPOCHS, K=$K, L=$L, S=$S, N=$N, NMAX=$NMAX, EPS=$EPS, ALPHA=$ALPHA, B=$B, PB=$PB, PC=$PC, BATCHSIZE=$BATCHSIZE, NOREPEATS=$NOREPEATS", RUN_NAME=$RUN_NAME
+    python3 train.py --epochs $EPOCHS --K $K --L $L --S $S --N $N --Nmax $NMAX --eps $EPS --alpha $ALPHA --B $B --p_B $PB --p_C $PC --batchsize $BATCHSIZE --no_repeats $NOREPEATS --run_name $RUN_NAME
 done

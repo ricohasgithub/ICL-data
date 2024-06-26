@@ -78,6 +78,9 @@ def train_model(epochs, K, L, S, N, Nmax, eps, alpha, B, p_B, p_C, batchsize, no
             print(f"Test acc: {acc_test}, IC acc: {acc_ic}, IC acc2: {acc_ic2}, IW acc: {acc_iw}")
             wandb.log({"eval_epoch": epoch, "test_acc": acc_test, "ic1_acc": acc_ic, "ic2_acc": acc_ic2, "iw_acc": acc_iw})
 
+        if epoch % 100000 == 0:
+            torch.save(model.state_dict(), os.path.join(output_dir, f"{K_}/model_{epoch}.pt"))
+
 
 
     # Example code to save the model (pseudo-code)
