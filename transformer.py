@@ -6,6 +6,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 class SequenceEmbedder(nn.Module):
 
     '''
@@ -38,8 +40,8 @@ class LayerNorm(nn.Module):
 
     def __init__(self, features, eps=1e-6):
         super(LayerNorm, self).__init__()
-        self.a_2 = nn.Parameter(torch.ones(features))
-        self.b_2 = nn.Parameter(torch.zeros(features))
+        self.a_2 = nn.Parameter(torch.ones(features)).to(device)
+        self.b_2 = nn.Parameter(torch.zeros(features)).to(device)
         self.eps = eps
 
     def forward(self, x):
@@ -219,4 +221,6 @@ class Transformer(nn.Module):
 
         x = F.relu(self.lin1(x))
         x = F.relu(self.lin2(x))
-        return self.lin3(x)
+
+        query = x[:, -1, :]
+        return self.lin3(query)

@@ -13,7 +13,7 @@ from transformer import Transformer
 
 epochs = 500
 
-K = 1024
+K = 512
 L = 32
 S = 10000
 N = 8
@@ -28,18 +28,21 @@ alpha = 0.01
 P = 1.0/(np.arange(1,K+1)**alpha)
 P /= np.sum(P)
 
-B = 1
+B = 2
 p_B = 0.5
 p_C = 0
 
 batchsize = 32
 no_repeats = False
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 def criterion(model, inputs, labels):
+    inputs, labels = inputs.to(device), labels.to(device)
     outputs = model(inputs)
-    label_probs = F.softmax(outputs, dim=-1)
-    loss = F.nll_loss(torch.log(label_probs), labels.argmax(dim=-1))
-    return loss
+    label_preds = F.softmax(outputs, dim=-1)
+    label_probs = torch.sum(label_preds*labels, dim=-1)
+    return -torch.mean(torch.log(label_probs))
 
 def accuracy(model, inputs, labels, mask=None, flip_labels=False):
     outputs = model(inputs)
@@ -56,7 +59,7 @@ def accuracy(model, inputs, labels, mask=None, flip_labels=False):
     correct = (label_preds_inds == label_inds).float()
     return correct.mean().item()
 
-model = Transformer(L)
+model = Transformer(L).to(device)
 optim = optim.SGD(model.parameters())
 
 for epoch in range(epochs):
@@ -74,3 +77,5 @@ for epoch in range(epochs):
     loss = criterion(model, inputs_batch, labels_batch)
     loss.backward()
     optim.step()
+
+    print(f"Epoch: {epoch}, Loss: {loss.item()}")

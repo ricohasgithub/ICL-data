@@ -200,6 +200,6 @@ def generate_input_seqs(
         inputs[s, :, shifts[s] : shifts[s] + 2 * N + 1] = np.identity(2 * N + 1)
 
     if output_target_labels:
-        return np.array(inputs), torch.tensor(labels), target_classes
+        return torch.tensor(inputs, dtype=torch.float32), torch.tensor(labels, dtype=torch.float32), target_classes
     else:
-        return torch.tensor(inputs), torch.tensor(labels)
+        return torch.tensor(inputs, dtype=torch.float32), torch.tensor(labels, dtype=torch.float32)
