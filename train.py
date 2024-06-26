@@ -59,7 +59,7 @@ P /= np.sum(P)
 
 B = 2
 p_B = 1
-p_C = 0.1
+p_C = 0.8
 
 batchsize = 128
 no_repeats = False
