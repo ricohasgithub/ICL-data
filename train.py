@@ -32,7 +32,7 @@ B = 2
 p_B = 0.5
 p_C = 0
 
-batchsize = 32
+batchsize = 128
 no_repeats = False
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -40,9 +40,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def criterion(model, inputs, labels):
     inputs, labels = inputs.to(device), labels.to(device)
     outputs = model(inputs)
-    label_preds = F.softmax(outputs, dim=-1)
-    label_probs = torch.sum(label_preds*labels, dim=-1)
-    return -torch.mean(torch.log(label_probs))
+    logits = F.softmax(outputs, dim=-1)
+    loss = F.cross_entropy(logits, labels)
+    return loss
 
 def accuracy(model, inputs, labels, mask=None, flip_labels=False):
     outputs = model(inputs)
@@ -60,7 +60,7 @@ def accuracy(model, inputs, labels, mask=None, flip_labels=False):
     return correct.mean().item()
 
 model = Transformer(L).to(device)
-optim = optim.SGD(model.parameters())
+optim = optim.SGD(model.parameters(), lr=0.01)
 
 for epoch in range(epochs):
 

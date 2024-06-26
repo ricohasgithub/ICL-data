@@ -80,10 +80,6 @@ class Attention(nn.Module):
 
         batch_size, seq_len = x.shape[0], x.shape[1]
 
-        # If a mask is given, add an extra dimension so the same mask can be applied over all heads
-        # if mask is not None:
-        #     mask = mask.unsqueeze(1)
-
         if y is None:
             y = x
 
@@ -215,7 +211,7 @@ class Transformer(nn.Module):
                 x *= mask[:, :, None]
             x = getattr(self, f"transformer_block_{i}")(x, mask=attention_mask)
 
-        x = self.layer_norm(x)
+        # x = self.layer_norm(x)
         if mask is not None:
             x *= mask[:, :, None]
 
