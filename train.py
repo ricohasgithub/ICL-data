@@ -40,7 +40,7 @@ def plot_grad_flow(named_parameters):
     plt.title("Gradient flow")
     plt.grid(True)
 
-epochs = 500
+epochs = 2000
 
 K = 512
 L = 32
@@ -59,7 +59,7 @@ P /= np.sum(P)
 
 B = 2
 p_B = 1
-p_C = 0.8
+p_C = 0.1
 
 batchsize = 128
 no_repeats = False
