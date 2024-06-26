@@ -135,9 +135,8 @@ class CausalAttention(Attention):
 class TransformerBlock(nn.Module):
     def __init__(
         self,
-        widening_factor=4,
-        n_heads=8,
-        d_hidden=64,
+        n_heads=1,
+        d_hidden=128,
         p_dropout=0.0,
         scaling=1.0,
         bias=True,
@@ -188,7 +187,6 @@ class Transformer(nn.Module):
                 self,
                 f"transformer_block_{i}",
                 TransformerBlock(
-                    widening_factor=4,
                     n_heads=self.n_heads,
                     d_hidden=self.d_hidden,
                     p_dropout=self.p_dropout,
@@ -199,21 +197,12 @@ class Transformer(nn.Module):
         self.lin2 = nn.Linear(d_hidden, d_hidden)
         self.lin3 = nn.Linear(d_hidden, n_classes)
 
-    def forward(self, x, mask=None, is_training=True):
-
-        if mask is not None:
-            attention_mask = mask[:, None, None, :]
-        else:
-            attention_mask = None
+    def forward(self, x):
 
         for i in range(self.n_layers):
-            if mask is not None:
-                x *= mask[:, :, None]
-            x = getattr(self, f"transformer_block_{i}")(x, mask=attention_mask)
+            x = getattr(self, f"transformer_block_{i}")(x)
 
-        # x = self.layer_norm(x)
-        if mask is not None:
-            x *= mask[:, :, None]
+        x = self.layer_norm(x)
 
         x = F.relu(self.lin1(x))
         x = F.relu(self.lin2(x))

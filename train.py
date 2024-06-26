@@ -2,6 +2,7 @@
 import sys
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
@@ -11,6 +12,28 @@ import torch.nn.functional as F
 from data import get_mus_label_class, generate_input_seqs
 from transformer import Transformer
 
+def plot_grad_flow(named_parameters):
+    
+    ave_grads = []
+    layers = []
+
+    for n, p in named_parameters:
+        if (p.requires_grad) and ("bias" not in n):
+            layers.append(n)
+            if p.grad is not None:
+                ave_grads.append(p.grad.abs().mean().cpu())
+            else:
+                ave_grads.append(-1)
+    
+    plt.plot(ave_grads, alpha=0.3, color="b")
+    plt.hlines(0, 0, len(ave_grads)+1, linewidth=1, color="k" )
+    plt.xticks(range(0,len(ave_grads), 1), layers)
+    plt.xlim(xmin=0, xmax=len(ave_grads))
+    plt.xlabel("Layers")
+    plt.ylabel("average gradient")
+    plt.title("Gradient flow")
+    plt.grid(True)
+
 epochs = 500
 
 K = 512
@@ -18,41 +41,41 @@ L = 32
 S = 10000
 N = 8
 Nmax = 32
-eps = 0
+eps = 0.1
 
 D = 63
 P = 65
 
-alpha = 0.01
+alpha = 0
 
 P = 1.0/(np.arange(1,K+1)**alpha)
 P /= np.sum(P)
 
 B = 2
-p_B = 0.5
-p_C = 0
+p_B = 1
+p_C = 0.8
 
 batchsize = 128
 no_repeats = False
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+loss_fn = nn.CrossEntropyLoss()
 
 def criterion(model, inputs, labels):
     inputs, labels = inputs.to(device), labels.to(device)
     outputs = model(inputs)
-    logits = F.softmax(outputs, dim=-1)
-    loss = F.cross_entropy(logits, labels)
+    loss = loss_fn(outputs, labels)
     return loss
 
-def accuracy(model, inputs, labels, mask=None, flip_labels=False):
+def accuracy(model, inputs, labels, flip_labels=False):
+
+    inputs, labels = inputs.to(device), labels.to(device)
     outputs = model(inputs)
+
     label_preds = F.softmax(outputs, dim=-1)
-    
-    if mask is not None:
-        label_preds += mask
     label_preds_inds = torch.argmax(label_preds, dim=1)
-    
     label_inds = torch.argmax(labels, dim=1)
+
     if flip_labels:
         label_inds = (label_inds + 1) % labels.size(-1)
     
@@ -60,22 +83,34 @@ def accuracy(model, inputs, labels, mask=None, flip_labels=False):
     return correct.mean().item()
 
 model = Transformer(L).to(device)
-optim = optim.SGD(model.parameters(), lr=0.01)
+model.train()
+
+optim = optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-6)
+mus_label, mus_class, labels_class = get_mus_label_class(K,L,D)
+
+test_inputs, test_labels  = generate_input_seqs(mus_label,mus_class,labels_class,S,N, Nmax,eps = eps, P = P, B = B, p_B = p_B, p_C = p_C, no_repeats = no_repeats)
+test_inputs_ic, test_labels_ic =  generate_input_seqs(mus_label,mus_class,labels_class,S,N, Nmax,eps = eps, P = P, B = B, p_B = 1, p_C = 1, no_repeats = no_repeats)
+test_inputs_ic2, test_labels_ic2 =  generate_input_seqs(mus_label,mus_class,labels_class,S,N, Nmax,eps = eps, P = P, B = B, p_B = 1, p_C = 0, flip_labels = True, no_repeats = no_repeats)
+test_inputs_iw, test_labels_iw =  generate_input_seqs(mus_label,mus_class,labels_class,S,N, Nmax,eps = eps, P = P, B = 0, p_B = 0, p_C = 0, no_repeats = no_repeats)
 
 for epoch in range(epochs):
 
     optim.zero_grad()
-    mus_label, mus_class, labels_class = get_mus_label_class(K,L,D)
-
-    test_inputs, test_labels  = generate_input_seqs(mus_label,mus_class,labels_class,S,N, Nmax,eps = eps, P = P, B = B, p_B = p_B, p_C = p_C, no_repeats = no_repeats)
-    test_inputs_ic, test_labels_ic =  generate_input_seqs(mus_label,mus_class,labels_class,S,N, Nmax,eps = eps, P = P, B = B, p_B = 1, p_C = 1, no_repeats = no_repeats)
-    test_inputs_ic2, test_labels_ic2 =  generate_input_seqs(mus_label,mus_class,labels_class,S,N, Nmax,eps = eps, P = P, B = B, p_B = 1, p_C = 0, flip_labels = True, no_repeats = no_repeats)
-    test_inputs_iw, test_labels_iw =  generate_input_seqs(mus_label,mus_class,labels_class,S,N, Nmax,eps = eps, P = P, B = 0, p_B = 0, p_C = 0, no_repeats = no_repeats)
-
     inputs_batch, labels_batch, target_classes = generate_input_seqs(mus_label, mus_class, labels_class, batchsize, N, Nmax, eps=eps, P=P, B=B, p_B=p_B, p_C=p_C, output_target_labels=True, no_repeats=no_repeats)
     
     loss = criterion(model, inputs_batch, labels_batch)
     loss.backward()
+
+    plot_grad_flow(model.named_parameters())
     optim.step()
 
     print(f"Epoch: {epoch}, Loss: {loss.item()}")
+
+    if epoch % 10 == 0:
+        acc_test = accuracy(model, test_inputs, test_labels)
+        acc_ic = accuracy(model, test_inputs_ic, test_labels_ic)
+        acc_ic2 = accuracy(model, test_inputs_ic2, test_labels_ic2, flip_labels = True)
+        acc_iw = accuracy(model, test_inputs_iw, test_labels_iw)
+        print(f"Test acc: {acc_test}, IC acc: {acc_ic}, IC acc2: {acc_ic2}, IW acc: {acc_iw}")
+
+plt.savefig("./grads.png")
