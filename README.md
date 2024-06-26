@@ -1,5 +1,5 @@
 # In-Context Learning Experiments
-This repository contains experiments to evaluate when transformers exhibit in-context learning (ICL) capabilities, and how expressive ICL is. Repo contains a pytorch implementation of the experiments described in [The Mechanistic Basis of Data Dependence and Abrupt Learning in an In-Context Classification Task](https://arxiv.org/pdf/2312.03002) (Reddy 2024).
+This repository contains experiments to evaluate when transformers exhibit in-context learning (ICL) capabilities, and how expressive ICL is. Repo contains a pytorch implementation of the experiments described in "The Mechanistic Basis of Data Dependence and Abrupt Learning in an In-Context Classification Task" ([Reddy 2024](https://arxiv.org/pdf/2312.03002)).
 
 ## About ICL
 
