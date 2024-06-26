@@ -1,5 +1,5 @@
 # In-Context Learning Experiments
-This repository contains experiments to evaluate when transformers exhibit in-context learning (ICL) capabilities, and how expressive ICL is. Repo contains a pytorch implementation of the experiments described in "The Mechanistic Basis of Data Dependence and Abrupt Learning in an In-Context Classification Task" ([Reddy 2024](https://arxiv.org/pdf/2312.03002)).
+This repository contains experiments to evaluate when transformers exhibit in-context learning (ICL) capabilities, and how expressive ICL is. Repo contains a pytorch implementation of the experiments described in "The Mechanistic Basis of Data Dependence and Abrupt Learning in an In-Context Classification Task" ([Reddy, 2024](https://arxiv.org/pdf/2312.03002)).
 
 ## About ICL
 
@@ -13,4 +13,4 @@ A model $f$ in-context learns the function class $\mathcal{H}$ up to $\epsilon$ 
 
 $$ \mathbb{E}_ {x_i, x_{query}, h}\left[(f(S)-h(x_{query}))^2\right] \leq \epsilon $$
 
-for large enough $n$ (from [Garg et al. 2022](https://arxiv.org/pdf/2208.01066)).
+for large enough $n$ (from [Garg et al., 2022](https://arxiv.org/pdf/2208.01066)).
