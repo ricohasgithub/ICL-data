@@ -11,7 +11,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 from data import get_mus_label_class, generate_input_seqs
-from transformer import Transformer
+from transformer import Transformer, MLP, Readout
 
 wandb.init(
     # Set the wandb project where this run will be logged
@@ -40,7 +40,7 @@ def plot_grad_flow(named_parameters):
     plt.title("Gradient flow")
     plt.grid(True)
 
-epochs = 500000
+epochs = 50000
 
 K = 512
 L = 32
@@ -58,8 +58,8 @@ P = 1.0/(np.arange(1,K+1)**alpha)
 P /= np.sum(P)
 
 B = 2
-p_B = 1
-p_C = 0.8
+p_B = 0.25
+p_C = 0.75
 
 batchsize = 128
 no_repeats = False
@@ -88,7 +88,7 @@ def accuracy(model, inputs, labels, flip_labels=False):
     correct = (label_preds_inds == label_inds).float()
     return correct.mean().item()
 
-model = Transformer(L).to(device)
+model = Transformer(L, mlp=Readout(L)).to(device)
 model.train()
 
 optim = optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-6)
