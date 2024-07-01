@@ -44,10 +44,10 @@ def plot_grad_flow(named_parameters):
     plt.title("Gradient flow")
     plt.grid(True)
 
-epochs = 7500
+epochs = 25000
 
 K = 512
-L = 32
+L = 128
 S = 10000
 N = 8
 Nmax = 32
@@ -71,16 +71,16 @@ no_repeats = False
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 loss_fn = nn.CrossEntropyLoss()
 
-def criterion(model, inputs, labels):
+def criterion(model, inputs, labels, epoch):
     inputs, labels = inputs.to(device), labels.to(device)
-    outputs = model(inputs)
+    outputs = model(inputs, epoch=epoch)
     loss = loss_fn(outputs, labels)
     return loss
 
-def accuracy(model, inputs, labels, flip_labels=False):
+def accuracy(model, inputs, labels, epoch=-1, vis_mode=-1, flip_labels=False):
 
     inputs, labels = inputs.to(device), labels.to(device)
-    outputs = model(inputs)
+    outputs = model(inputs, epoch=epoch, vis_mode=vis_mode)
 
     label_preds = F.softmax(outputs, dim=-1)
     label_preds_inds = torch.argmax(label_preds, dim=1)
@@ -93,11 +93,12 @@ def accuracy(model, inputs, labels, flip_labels=False):
     return correct.mean().item()
 
 mlp_readout = Readout(L)
-# model = Transformer(L, mlp=mlp_readout).to(device)
-model = Transformer(L).to(device)
+model = Transformer(L, mlp=mlp_readout).to(device)
+# model = Transformer(L).to(device)
 model.train()
 
-optim = optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-6)
+optim = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-6)
+# optim = optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-6)
 mus_label, mus_class, labels_class = get_mus_label_class(K,L,D)
 
 test_inputs, test_labels  = generate_input_seqs(mus_label,mus_class,labels_class,S,N, Nmax,eps = eps, P = P, B = B, p_B = p_B, p_C = p_C, no_repeats = no_repeats)
@@ -110,7 +111,7 @@ for epoch in range(epochs):
     optim.zero_grad()
     inputs_batch, labels_batch, target_classes = generate_input_seqs(mus_label, mus_class, labels_class, batchsize, N, Nmax, eps=eps, P=P, B=B, p_B=p_B, p_C=p_C, output_target_labels=True, no_repeats=no_repeats)
     
-    loss = criterion(model, inputs_batch, labels_batch)
+    loss = criterion(model, inputs_batch, labels_batch, -1)
     loss.backward()
 
     plot_grad_flow(model.named_parameters())
@@ -120,10 +121,10 @@ for epoch in range(epochs):
     wandb.log({"epoch": epoch, "train_loss": loss})
 
     if epoch % 10 == 0:
-        acc_test = accuracy(model, test_inputs, test_labels)
-        acc_ic = accuracy(model, test_inputs_ic, test_labels_ic)
-        acc_ic2 = accuracy(model, test_inputs_ic2, test_labels_ic2, flip_labels = True)
-        acc_iw = accuracy(model, test_inputs_iw, test_labels_iw)
+        acc_test = accuracy(model, test_inputs, test_labels, epoch=-1, vis_mode=-1)
+        acc_ic = accuracy(model, test_inputs_ic, test_labels_ic, epoch=epoch, vis_mode=1)
+        acc_ic2 = accuracy(model, test_inputs_ic2, test_labels_ic2, epoch=epoch, vis_mode=2, flip_labels = True)
+        acc_iw = accuracy(model, test_inputs_iw, test_labels_iw, epoch=epoch, vis_mode=3)
         print(f"Test acc: {acc_test}, IC acc: {acc_ic}, IC acc2: {acc_ic2}, IW acc: {acc_iw}")
         wandb.log({"eval_epoch": epoch, "test_acc": acc_test, "ic1_acc": acc_ic, "ic2_acc": acc_ic2, "iw_acc": acc_iw})
 
