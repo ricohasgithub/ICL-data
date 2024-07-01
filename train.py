@@ -25,7 +25,11 @@ def plot_grad_flow(named_parameters):
 
     for n, p in named_parameters:
         if (p.requires_grad) and ("bias" not in n):
-            layers.append(n)
+            # If this is a transformer block
+            if n.split(".")[-3] == "causal_block":
+                layers.append(n.split(".")[-2] + "," + n.split(".")[0][-1])
+            else:
+                layers.append(n.split(".")[-2])
             if p.grad is not None:
                 ave_grads.append(p.grad.abs().mean().cpu())
             else:
@@ -40,14 +44,14 @@ def plot_grad_flow(named_parameters):
     plt.title("Gradient flow")
     plt.grid(True)
 
-epochs = 50000
+epochs = 7500
 
 K = 512
 L = 32
 S = 10000
 N = 8
 Nmax = 32
-eps = 0.1
+eps = 0
 
 D = 63
 P = 65
@@ -57,9 +61,9 @@ alpha = 0
 P = 1.0/(np.arange(1,K+1)**alpha)
 P /= np.sum(P)
 
-B = 2
+B = 1
 p_B = 0.25
-p_C = 0.75
+p_C = 0.25
 
 batchsize = 128
 no_repeats = False
@@ -88,7 +92,9 @@ def accuracy(model, inputs, labels, flip_labels=False):
     correct = (label_preds_inds == label_inds).float()
     return correct.mean().item()
 
-model = Transformer(L, mlp=Readout(L)).to(device)
+mlp_readout = Readout(L)
+# model = Transformer(L, mlp=mlp_readout).to(device)
+model = Transformer(L).to(device)
 model.train()
 
 optim = optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-6)
