@@ -1,4 +1,3 @@
-
 import sys
 import wandb
 
@@ -13,13 +12,9 @@ import torch.nn.functional as F
 from data import get_mus_label_class, generate_input_seqs
 from transformer import Transformer, MLP, Readout
 
-wandb.init(
-    # Set the wandb project where this run will be logged
-    project="icl-data",
-)
 
 def plot_grad_flow(named_parameters):
-    
+
     ave_grads = []
     layers = []
 
@@ -30,15 +25,16 @@ def plot_grad_flow(named_parameters):
                 ave_grads.append(p.grad.abs().mean().cpu())
             else:
                 ave_grads.append(-1)
-    
+
     plt.plot(ave_grads, alpha=0.3, color="b")
-    plt.hlines(0, 0, len(ave_grads)+1, linewidth=1, color="k" )
-    plt.xticks(range(0,len(ave_grads), 1), layers)
+    plt.hlines(0, 0, len(ave_grads) + 1, linewidth=1, color="k")
+    plt.xticks(range(0, len(ave_grads), 1), layers)
     plt.xlim(xmin=0, xmax=len(ave_grads))
     plt.xlabel("Layers")
     plt.ylabel("average gradient")
     plt.title("Gradient flow")
     plt.grid(True)
+
 
 epochs = 50000
 
@@ -54,7 +50,7 @@ P = 65
 
 alpha = 0
 
-P = 1.0/(np.arange(1,K+1)**alpha)
+P = 1.0 / (np.arange(1, K + 1) ** alpha)
 P /= np.sum(P)
 
 B = 2
@@ -67,11 +63,13 @@ no_repeats = False
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 loss_fn = nn.CrossEntropyLoss()
 
+
 def criterion(model, inputs, labels):
     inputs, labels = inputs.to(device), labels.to(device)
     outputs = model(inputs)
     loss = loss_fn(outputs, labels)
     return loss
+
 
 def accuracy(model, inputs, labels, flip_labels=False):
 
@@ -84,26 +82,117 @@ def accuracy(model, inputs, labels, flip_labels=False):
 
     if flip_labels:
         label_inds = (label_inds + 1) % labels.size(-1)
-    
+
     correct = (label_preds_inds == label_inds).float()
     return correct.mean().item()
 
-model = Transformer(L, mlp=Readout(L)).to(device)
+
+model = Transformer(L, mlp=MLP(L)).to(device)
 model.train()
 
-optim = optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-6)
-mus_label, mus_class, labels_class = get_mus_label_class(K,L,D)
+mlp_params = list(filter(lambda kv: "mlp" in kv[0], model.named_parameters()))
+transformer_params = list(
+    filter(lambda kv: "mlp" not in kv[0], model.named_parameters())
+)
 
-test_inputs, test_labels  = generate_input_seqs(mus_label,mus_class,labels_class,S,N, Nmax,eps = eps, P = P, B = B, p_B = p_B, p_C = p_C, no_repeats = no_repeats)
-test_inputs_ic, test_labels_ic =  generate_input_seqs(mus_label,mus_class,labels_class,S,N, Nmax,eps = eps, P = P, B = B, p_B = 1, p_C = 1, no_repeats = no_repeats)
-test_inputs_ic2, test_labels_ic2 =  generate_input_seqs(mus_label,mus_class,labels_class,S,N, Nmax,eps = eps, P = P, B = B, p_B = 1, p_C = 0, flip_labels = True, no_repeats = no_repeats)
-test_inputs_iw, test_labels_iw =  generate_input_seqs(mus_label,mus_class,labels_class,S,N, Nmax,eps = eps, P = P, B = 0, p_B = 0, p_C = 0, no_repeats = no_repeats)
+transformer_lr = 0.1
+mlp_lr = 0.1
+
+optim = optim.SGD(
+    [
+        {"params": [param[1] for param in transformer_params], "lr": transformer_lr},
+        {"params": [param[1] for param in mlp_params], "lr": mlp_lr},
+    ],
+    lr=1e-1,
+    weight_decay=1e-6,
+)
+mus_label, mus_class, labels_class = get_mus_label_class(K, L, D)
+
+test_inputs, test_labels = generate_input_seqs(
+    mus_label,
+    mus_class,
+    labels_class,
+    S,
+    N,
+    Nmax,
+    eps=eps,
+    P=P,
+    B=B,
+    p_B=p_B,
+    p_C=p_C,
+    no_repeats=no_repeats,
+)
+test_inputs_ic, test_labels_ic = generate_input_seqs(
+    mus_label,
+    mus_class,
+    labels_class,
+    S,
+    N,
+    Nmax,
+    eps=eps,
+    P=P,
+    B=B,
+    p_B=1,
+    p_C=1,
+    no_repeats=no_repeats,
+)
+test_inputs_ic2, test_labels_ic2 = generate_input_seqs(
+    mus_label,
+    mus_class,
+    labels_class,
+    S,
+    N,
+    Nmax,
+    eps=eps,
+    P=P,
+    B=B,
+    p_B=1,
+    p_C=0,
+    flip_labels=True,
+    no_repeats=no_repeats,
+)
+test_inputs_iw, test_labels_iw = generate_input_seqs(
+    mus_label,
+    mus_class,
+    labels_class,
+    S,
+    N,
+    Nmax,
+    eps=eps,
+    P=P,
+    B=0,
+    p_B=0,
+    p_C=0,
+    no_repeats=no_repeats,
+)
+
+
+wandb.init(
+    # Set the wandb project where this run will be logged
+    project="icl-data",
+    name=f"transform_lr={transformer_lr} | mlp_lr={mlp_lr} | B={B} | p_B={p_B} | p_C = {p_C}",
+)
+
 
 for epoch in range(epochs):
 
     optim.zero_grad()
-    inputs_batch, labels_batch, target_classes = generate_input_seqs(mus_label, mus_class, labels_class, batchsize, N, Nmax, eps=eps, P=P, B=B, p_B=p_B, p_C=p_C, output_target_labels=True, no_repeats=no_repeats)
-    
+    inputs_batch, labels_batch, target_classes = generate_input_seqs(
+        mus_label,
+        mus_class,
+        labels_class,
+        batchsize,
+        N,
+        Nmax,
+        eps=eps,
+        P=P,
+        B=B,
+        p_B=p_B,
+        p_C=p_C,
+        output_target_labels=True,
+        no_repeats=no_repeats,
+    )
+
     loss = criterion(model, inputs_batch, labels_batch)
     loss.backward()
 
@@ -116,9 +205,19 @@ for epoch in range(epochs):
     if epoch % 10 == 0:
         acc_test = accuracy(model, test_inputs, test_labels)
         acc_ic = accuracy(model, test_inputs_ic, test_labels_ic)
-        acc_ic2 = accuracy(model, test_inputs_ic2, test_labels_ic2, flip_labels = True)
+        acc_ic2 = accuracy(model, test_inputs_ic2, test_labels_ic2, flip_labels=True)
         acc_iw = accuracy(model, test_inputs_iw, test_labels_iw)
-        print(f"Test acc: {acc_test}, IC acc: {acc_ic}, IC acc2: {acc_ic2}, IW acc: {acc_iw}")
-        wandb.log({"eval_epoch": epoch, "test_acc": acc_test, "ic1_acc": acc_ic, "ic2_acc": acc_ic2, "iw_acc": acc_iw})
+        print(
+            f"Test acc: {acc_test}, IC acc: {acc_ic}, IC acc2: {acc_ic2}, IW acc: {acc_iw}"
+        )
+        wandb.log(
+            {
+                "eval_epoch": epoch,
+                "test_acc": acc_test,
+                "ic1_acc": acc_ic,
+                "ic2_acc": acc_ic2,
+                "iw_acc": acc_iw,
+            }
+        )
 
 plt.savefig("./grads.png")
