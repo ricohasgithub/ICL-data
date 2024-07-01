@@ -1,4 +1,3 @@
-
 import math
 import random
 
@@ -8,32 +7,34 @@ import torch.nn.functional as F
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-class SequenceEmbedder(nn.Module):
 
-    '''
-        P = one-hot positional embedding dimension
-        D = embedding dimension for items/labels
-        N = sequence length
-    '''
+class SequenceEmbedder(nn.Module):
+    """
+    P = one-hot positional embedding dimension
+    D = embedding dimension for items/labels
+    N = sequence length
+    """
+
     def __init__(self, P, D, N):
         self.P = P
         self.D = D
         self.N = N
-    
-    # examples and labels each has shape (batch_size, sequence_length, D) 
+
+    # examples and labels each has shape (batch_size, sequence_length, D)
     def forward(self, examples, labels, is_training=True):
 
         batch_size, N, D = examples.size()
-        pos_encoding = torch.zeros(batch_size, 2*N+1, self.P)
+        pos_encoding = torch.zeros(batch_size, 2 * N + 1, self.P)
 
-        start_index = random.randint(0, self.P - (2*N + 1))
-        one_hot_indices = torch.arange(start_index, start_index + (2*N+1))
+        start_index = random.randint(0, self.P - (2 * N + 1))
+        one_hot_indices = torch.arange(start_index, start_index + (2 * N + 1))
         pos_encoding.scatter_(2, one_hot_indices.unsqueeze(2), 1)
 
-        interleaved = torch.empty((batch_size, 2*N+1, D), dtype=examples.dtype)
+        interleaved = torch.empty((batch_size, 2 * N + 1, D), dtype=examples.dtype)
         interleaved[:, 0::2] = examples
         interleaved[:, 1::2] = labels[:, :-1]
         return torch.cat((pos_encoding, interleaved), dim=2)
+
 
 class LayerNorm(nn.Module):
     "Code from: https://nlp.seas.harvard.edu/annotated-transformer/"
@@ -48,7 +49,7 @@ class LayerNorm(nn.Module):
         mean = x.mean(-1, keepdim=True)
         std = x.std(-1, keepdim=True)
         return self.a_2 * (x - mean) / (std + self.eps) + self.b_2
-    
+
 
 class Attention(nn.Module):
 
@@ -64,6 +65,10 @@ class Attention(nn.Module):
             else "cpu"
             # else "mps" if torch.backends.mps.is_available() else "cpu"
         )
+
+        # self.device = torch.device(
+        #     "mps" if torch.backends.mps.is_available() else "cpu"
+        # )
 
         self.n_heads = n_heads
         self.d_hidden = d_hidden
@@ -113,7 +118,7 @@ class Attention(nn.Module):
         att_dist = att_scores.softmax(dim=-1)
 
         return torch.matmul(att_dist, V), att_dist
-    
+
 
 class CausalAttention(Attention):
 
@@ -130,7 +135,10 @@ class CausalAttention(Attention):
             mask = torch.broadcast_to(causal_mask, (batch_size, 1, seq_len, seq_len))
         else:
             mask = mask * causal_mask
+
+        mask = mask.to(self.device)
         return super(CausalAttention, self).forward(x=x, y=y, mask=mask)
+
 
 class TransformerBlock(nn.Module):
     def __init__(
@@ -143,11 +151,10 @@ class TransformerBlock(nn.Module):
     ):
         super(TransformerBlock, self).__init__()
 
-        self.device = torch.device(
-            "cuda"
-            if torch.cuda.is_available()
-            else "cpu"
-        )
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # self.device = torch.device(
+        #     "mps" if torch.backends.mps.is_available() else "cpu"
+        # )
 
         self.n_heads = n_heads
         self.d_hidden = d_hidden
@@ -164,6 +171,7 @@ class TransformerBlock(nn.Module):
         x = x + self.causal_block(self.layer_norm(x), y, mask)
         return x
 
+
 class MLP(nn.Module):
 
     def __init__(self, n_classes, d_hidden=128):
@@ -178,6 +186,7 @@ class MLP(nn.Module):
         query = x[:, -1, :]
         return self.lin3(query)
 
+
 class Readout(nn.Module):
 
     def __init__(self, n_classes):
@@ -186,18 +195,20 @@ class Readout(nn.Module):
 
     def forward(self, x):
         query = x[:, -1, :]
-        return query[:, :self.n_classes]
+        return query[:, : self.n_classes]
+
 
 class Transformer(nn.Module):
 
-    def __init__(self, n_classes, n_layers=2, n_heads=1, p_dropout=0.0, d_hidden=128, mlp=None):
+    def __init__(
+        self, n_classes, n_layers=2, n_heads=1, p_dropout=0.0, d_hidden=128, mlp=None
+    ):
         super(Transformer, self).__init__()
 
-        self.device = torch.device(
-            "cuda"
-            if torch.cuda.is_available()
-            else "cpu"
-        )
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # self.device = torch.device(
+        #     "mps" if torch.backends.mps.is_available() else "cpu"
+        # )
 
         self.n_classes = n_classes
         self.n_layers = n_layers
