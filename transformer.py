@@ -164,9 +164,33 @@ class TransformerBlock(nn.Module):
         x = x + self.causal_block(self.layer_norm(x), y, mask)
         return x
 
+class MLP(nn.Module):
+
+    def __init__(self, n_classes, d_hidden=128):
+        super(MLP, self).__init__()
+        self.lin1 = nn.Linear(d_hidden, d_hidden)
+        self.lin2 = nn.Linear(d_hidden, d_hidden)
+        self.lin3 = nn.Linear(d_hidden, n_classes)
+
+    def forward(self, x):
+        x = F.relu(self.lin1(x))
+        x = F.relu(self.lin2(x))
+        query = x[:, -1, :]
+        return self.lin3(query)
+
+class Readout(nn.Module):
+
+    def __init__(self, n_classes):
+        super(Readout, self).__init__()
+        self.n_classes = n_classes
+
+    def forward(self, x):
+        query = x[:, -1, :]
+        return query[:, :self.n_classes]
+
 class Transformer(nn.Module):
 
-    def __init__(self, n_classes, n_layers=2, n_heads=1, p_dropout=0.0, d_hidden=128):
+    def __init__(self, n_classes, n_layers=2, n_heads=1, p_dropout=0.0, d_hidden=128, mlp=None):
         super(Transformer, self).__init__()
 
         self.device = torch.device(
@@ -193,9 +217,10 @@ class Transformer(nn.Module):
                 ).to(self.device),
             )
 
-        self.lin1 = nn.Linear(d_hidden, d_hidden)
-        self.lin2 = nn.Linear(d_hidden, d_hidden)
-        self.lin3 = nn.Linear(d_hidden, n_classes)
+        if mlp:
+            self.mlp = mlp
+        else:
+            self.mlp = MLP(n_classes, d_hidden)
 
     def forward(self, x):
 
@@ -203,9 +228,5 @@ class Transformer(nn.Module):
             x = getattr(self, f"transformer_block_{i}")(x)
 
         x = self.layer_norm(x)
-
-        x = F.relu(self.lin1(x))
-        x = F.relu(self.lin2(x))
-
-        query = x[:, -1, :]
-        return self.lin3(query)
+        x = self.mlp(x)
+        return x
