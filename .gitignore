@@ -1,2 +1,10 @@
 icl_out/
 wandb/
+ic1_attention_vis/layer0/*.png
+ic1_attention_vis/layer1/*.png
+ic2_attention_vis/layer0/*.png
+ic2_attention_vis/layer1/*.png
+iw_attention_vis/layer0/*.png
+iw_attention_vis/layer1/*.png
+train_attention_vis/layer0/*.png
+train_attention_vis/layer1/*.png

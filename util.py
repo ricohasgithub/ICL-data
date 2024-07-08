@@ -10,7 +10,8 @@ def seq_vis(seq_vectors, seq_labels):
 
     plt.show()
 
-def attention_map_vis(attention_matrix, classes=None, layer=0, vis_mode=-1):
+
+def attention_map_vis(attention_matrix, classes=None, layer=0, vis_mode=-1, epoch=-1):
     attention_matrix = attention_matrix.cpu().detach().numpy()
     attention_matrix = attention_matrix[0][0]
 
@@ -23,10 +24,10 @@ def attention_map_vis(attention_matrix, classes=None, layer=0, vis_mode=-1):
         seaborn.heatmap(attention_matrix, xticklabels=classes, yticklabels=classes)
 
     if vis_mode == 0:
-        plt.savefig(f"./attn_map_{layer}_train.png")
+        plt.savefig(f"./train_attention_vis/layer{layer}/attn_map_{epoch}.png")
     elif vis_mode == 1:
-        plt.savefig(f"./attn_map_{layer}_IC1.png")
+        plt.savefig(f"./ic1_attention_vis/layer{layer}/attn_map_{epoch}.png")
     elif vis_mode == 2:
-        plt.savefig(f"./attn_map_{layer}_IC2.png")
+        plt.savefig(f"./ic2_attention_vis/layer{layer}/attn_map_{epoch}.png")
     elif vis_mode == 3:
-        plt.savefig(f"./attn_map_{layer}_IW.png")
+        plt.savefig(f"./iw_attention_vis/layer{layer}/attn_map_{epoch}.png")
