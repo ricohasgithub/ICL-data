@@ -49,7 +49,7 @@ def plot_grad_flow(named_parameters):
 epochs = 25000
 
 K = 512
-L = 128
+L = 32
 S = 10000
 N = 8
 Nmax = 32
@@ -221,8 +221,9 @@ for epoch in range(epochs):
             }
         )
 
-plt.savefig("./grads.png")
+    if epoch % 1000 == 0:
+        for vis_mode in range(1, 4):
+            for layer in range(2):
+                gen_attention_map_gif(vis_mode=vis_mode, layer=layer)
 
-for vis_mode in range(1, 4):
-    for layer in range(2):
-        gen_attention_map_gif(vis_mode=vis_mode, layer=layer)
+# plt.savefig("./grads.png")

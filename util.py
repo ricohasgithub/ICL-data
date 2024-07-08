@@ -34,6 +34,8 @@ def attention_map_vis(attention_matrix, classes=None, layer=0, vis_mode=-1, epoc
     elif vis_mode == 3:
         plt.savefig(f"./iw_attention_vis/layer{layer}/attn_map_{epoch}.png")
 
+    plt.close()
+
 
 def gen_attention_map_gif(vis_mode=-1, layer=-1):
     folder = None
@@ -48,10 +50,17 @@ def gen_attention_map_gif(vis_mode=-1, layer=-1):
 
     images = []
     files = os.listdir(f"./{folder}/layer{layer}/")
-    files.sort()
+    files = [file for file in files if file.endswith(".png")]
+    files.sort(key=lambda file: int(file[9 : file.index(".")]))
 
     for filename in files:
         if filename.endswith(".png"):
+            # print(filename)
             images.append(imageio.imread(f"./{folder}/layer{layer}/{filename}"))
 
     imageio.mimsave(f"./{folder}/layer{layer}.gif", images, duration=0.5)
+
+
+for vis_mode in range(1, 4):
+    for layer in range(2):
+        gen_attention_map_gif(vis_mode=vis_mode, layer=layer)
