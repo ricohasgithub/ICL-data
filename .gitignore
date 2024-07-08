@@ -1,5 +1,6 @@
 icl_out/
 wandb/
+__pycache__/
 ic1_attention_vis/layer0/*.png
 ic1_attention_vis/layer1/*.png
 ic2_attention_vis/layer0/*.png
@@ -8,3 +9,8 @@ iw_attention_vis/layer0/*.png
 iw_attention_vis/layer1/*.png
 train_attention_vis/layer0/*.png
 train_attention_vis/layer1/*.png
+
+ic1_attention_vis/*.gif
+ic2_attention_vis/*.gif
+icw_attention_vis/*.gif
+train_attention_vis/*.gif

@@ -11,6 +11,7 @@ import torch.nn.functional as F
 
 from data import get_mus_label_class, generate_input_seqs
 from transformer import Transformer, MLP, Readout
+from util import gen_attention_map_gif
 
 wandb.init(
     # Set the wandb project where this run will be logged
@@ -221,3 +222,7 @@ for epoch in range(epochs):
         )
 
 plt.savefig("./grads.png")
+
+for vis_mode in range(1, 4):
+    for layer in range(2):
+        gen_attention_map_gif(vis_mode=vis_mode, layer=layer)
