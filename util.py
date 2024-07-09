@@ -18,7 +18,7 @@ def attention_map_vis(attention_matrix, classes=None, layer=0, vis_mode=-1, epoc
     attention_matrix = attention_matrix[0][0]
 
     plt.figure()
-    plt.title("Attention Map")
+    plt.title(f"Attention Map {epoch}")
 
     if classes == None:
         seaborn.heatmap(attention_matrix)
@@ -58,7 +58,7 @@ def gen_attention_map_gif(vis_mode=-1, layer=-1):
             # print(filename)
             images.append(imageio.imread(f"./{folder}/layer{layer}/{filename}"))
 
-    imageio.mimsave(f"./{folder}/layer{layer}.gif", images, duration=0.5)
+    imageio.mimsave(f"./{folder}/layer{layer}.gif", images, duration=0.25)
 
 
 for vis_mode in range(1, 4):
