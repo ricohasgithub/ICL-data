@@ -64,8 +64,8 @@ P = 1.0 / (np.arange(1, K + 1) ** alpha)
 P /= np.sum(P)
 
 B = 1
-p_B = 0.25
-p_C = 0.25
+p_B = 0.75
+p_C = 0.75
 
 batchsize = 128
 no_repeats = False
