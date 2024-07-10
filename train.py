@@ -11,12 +11,8 @@ import torch.nn.functional as F
 
 from data import get_mus_label_class, generate_input_seqs
 from transformer import Transformer, MLP, Readout
-from util import gen_attention_map_gif
-
-wandb.init(
-    # Set the wandb project where this run will be logged
-    project="icl-data",
-)
+from util import gen_attention_map_gif, create_image_gif_folder_structure
+import uuid
 
 
 def plot_grad_flow(named_parameters):
@@ -50,7 +46,6 @@ epochs = 25000
 
 K = 512
 L = 32
-L = 32
 S = 10000
 N = 8
 Nmax = 32
@@ -65,13 +60,13 @@ P = 1.0 / (np.arange(1, K + 1) ** alpha)
 P /= np.sum(P)
 
 B = 1
-p_B = 0.75
-p_C = 0.75
-p_B = 0.75
-p_C = 0.75
+p_B = 0.25
+p_C = 0.25
 
 batchsize = 128
 no_repeats = False
+
+use_mlp = True
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 loss_fn = nn.CrossEntropyLoss()
@@ -84,10 +79,12 @@ def criterion(model, inputs, labels, epoch):
     return loss
 
 
-def accuracy(model, inputs, labels, epoch=-1, vis_mode=-1, flip_labels=False):
+def accuracy(
+    model, inputs, labels, epoch=-1, vis_mode=-1, flip_labels=False, vis_path=None
+):
 
     inputs, labels = inputs.to(device), labels.to(device)
-    outputs = model(inputs, epoch=epoch, vis_mode=vis_mode)
+    outputs = model(inputs, epoch=epoch, vis_mode=vis_mode, vis_path=vis_path)
 
     label_preds = F.softmax(outputs, dim=-1)
     label_preds_inds = torch.argmax(label_preds, dim=1)
@@ -100,13 +97,34 @@ def accuracy(model, inputs, labels, epoch=-1, vis_mode=-1, flip_labels=False):
     return correct.mean().item()
 
 
-mlp_readout = Readout(L)
-model = Transformer(L, mlp=mlp_readout).to(device)
-# model = Transformer(L).to(device)
+if not use_mlp:
+
+    wandb.init(
+        # Set the wandb project where this run will be logged
+        project="icl-data",
+        name=f"Readout, K={K}, L={L}, p_B={p_B}, p_C={p_C}, B={B}, eps={eps}",
+    )
+
+    run_path = f"Readout|K={K}|L={L}|p_B={p_B}|p_C={p_C}|B={B}|eps={eps}"
+
+    mlp_readout = Readout(L)
+    model = Transformer(L, mlp=mlp_readout).to(device)
+else:
+
+    wandb.init(
+        # Set the wandb project where this run will be logged
+        project="icl-data",
+        name=f"MLP, K={K}, L={L}, p_B={p_B}, p_C={p_C}, B={B}, eps={eps}",
+    )
+    run_path = f"MLP|K={K}|L={L}|p_B={p_B}|p_C={p_C}|B={B}|eps={eps}"
+    model = Transformer(L).to(device)
+
+run_path += f"|{uuid.uuid4()}"
+create_image_gif_folder_structure(run_path)
+
+
 model.train()
 
-# optim = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-6)
-optim = optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-6)
 # optim = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-6)
 optim = optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-6)
 mus_label, mus_class, labels_class = get_mus_label_class(K, L, D)
@@ -198,9 +216,16 @@ for epoch in range(epochs):
     wandb.log({"epoch": epoch, "train_loss": loss})
 
     if epoch % 10 == 0:
-        acc_test = accuracy(model, test_inputs, test_labels, epoch=-1, vis_mode=-1)
+        acc_test = accuracy(
+            model, test_inputs, test_labels, epoch=-1, vis_mode=-1, vis_path=run_path
+        )
         acc_ic = accuracy(
-            model, test_inputs_ic, test_labels_ic, epoch=epoch, vis_mode=1
+            model,
+            test_inputs_ic,
+            test_labels_ic,
+            epoch=epoch,
+            vis_mode=1,
+            vis_path=run_path,
         )
         acc_ic2 = accuracy(
             model,
@@ -209,9 +234,15 @@ for epoch in range(epochs):
             epoch=epoch,
             vis_mode=2,
             flip_labels=True,
+            vis_path=run_path,
         )
         acc_iw = accuracy(
-            model, test_inputs_iw, test_labels_iw, epoch=epoch, vis_mode=3
+            model,
+            test_inputs_iw,
+            test_labels_iw,
+            epoch=epoch,
+            vis_mode=3,
+            vis_path=run_path,
         )
         print(
             f"Test acc: {acc_test}, IC acc: {acc_ic}, IC acc2: {acc_ic2}, IW acc: {acc_iw}"
@@ -227,8 +258,10 @@ for epoch in range(epochs):
         )
 
 # plt.savefig("./grads.png")
-# plt.savefig("./grads.png")
 
 for vis_mode in range(1, 4):
-    for layer in range(2):
-        gen_attention_map_gif(vis_mode=vis_mode, layer=layer)
+    for vis_mode in range(1, 4):
+        for layer in range(2):
+            gen_attention_map_gif(run_path, vis_mode=vis_mode, layer=layer)
+
+# plt.savefig("./grads.png")
