@@ -13,7 +13,9 @@ def seq_vis(seq_vectors, seq_labels):
     plt.show()
 
 
-def attention_map_vis(attention_matrix, classes=None, layer=0, vis_mode=-1, epoch=-1):
+def attention_map_vis(
+    attention_matrix, path, classes=None, layer=0, vis_mode=-1, epoch=-1
+):
     attention_matrix = attention_matrix.cpu().detach().numpy()
     attention_matrix = attention_matrix[0][0]
 
@@ -26,41 +28,46 @@ def attention_map_vis(attention_matrix, classes=None, layer=0, vis_mode=-1, epoc
         seaborn.heatmap(attention_matrix, xticklabels=classes, yticklabels=classes)
 
     if vis_mode == 0:
-        plt.savefig(f"./train_attention_vis/layer{layer}/attn_map_{epoch}.png")
+        plt.savefig(f"{path}/train/layer{layer}/attn_map_{epoch}.png")
     elif vis_mode == 1:
-        plt.savefig(f"./ic1_attention_vis/layer{layer}/attn_map_{epoch}.png")
+        plt.savefig(f"{path}/icl1/layer{layer}/attn_map_{epoch}.png")
     elif vis_mode == 2:
-        plt.savefig(f"./ic2_attention_vis/layer{layer}/attn_map_{epoch}.png")
+        plt.savefig(f"{path}/icl2/layer{layer}/attn_map_{epoch}.png")
     elif vis_mode == 3:
-        plt.savefig(f"./iw_attention_vis/layer{layer}/attn_map_{epoch}.png")
+        plt.savefig(f"{path}/iwl/layer{layer}/attn_map_{epoch}.png")
 
     plt.close()
 
 
-def gen_attention_map_gif(vis_mode=-1, layer=-1):
+def gen_attention_map_gif(path, vis_mode=-1, layer=-1):
     folder = None
     if vis_mode == 0:
-        folder = "train_attention_vis"
+        folder = "train"
     elif vis_mode == 1:
-        folder = "ic1_attention_vis"
+        folder = "icl1"
     elif vis_mode == 2:
-        folder = "ic2_attention_vis"
+        folder = "icl2"
     elif vis_mode == 3:
-        folder = "iw_attention_vis"
+        folder = "iwl"
 
     images = []
-    files = os.listdir(f"./{folder}/layer{layer}/")
+    files = os.listdir(f"{path}/{folder}/layer{layer}/")
     files = [file for file in files if file.endswith(".png")]
     files.sort(key=lambda file: int(file[9 : file.index(".")]))
 
     for filename in files:
         if filename.endswith(".png"):
             # print(filename)
-            images.append(imageio.imread(f"./{folder}/layer{layer}/{filename}"))
+            images.append(imageio.imread(f"{path}/{folder}/layer{layer}/{filename}"))
 
-    imageio.mimsave(f"./{folder}/layer{layer}.gif", images, duration=0.25)
+    imageio.mimsave(f"{path}/{folder}/layer{layer}.gif", images, duration=0.25)
 
 
-for vis_mode in range(1, 4):
-    for layer in range(2):
-        gen_attention_map_gif(vis_mode=vis_mode, layer=layer)
+def create_image_gif_folder_structure(run_name):
+
+    os.makedirs(f"./runs/{run_name}/icl1/layer0/")
+    os.makedirs(f"./runs/{run_name}/icl1/layer1/")
+    os.makedirs(f"./runs/{run_name}/icl2/layer0/")
+    os.makedirs(f"./runs/{run_name}/icl2/layer1/")
+    os.makedirs(f"./runs/{run_name}/iwl/layer0/")
+    os.makedirs(f"./runs/{run_name}/iwl/layer1/")
