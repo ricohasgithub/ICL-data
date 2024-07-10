@@ -50,6 +50,7 @@ epochs = 25000
 
 K = 512
 L = 32
+L = 32
 S = 10000
 N = 8
 Nmax = 32
@@ -64,6 +65,8 @@ P = 1.0 / (np.arange(1, K + 1) ** alpha)
 P /= np.sum(P)
 
 B = 1
+p_B = 0.75
+p_C = 0.75
 p_B = 0.75
 p_C = 0.75
 
@@ -102,6 +105,8 @@ model = Transformer(L, mlp=mlp_readout).to(device)
 # model = Transformer(L).to(device)
 model.train()
 
+# optim = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-6)
+optim = optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-6)
 # optim = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-6)
 optim = optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-6)
 mus_label, mus_class, labels_class = get_mus_label_class(K, L, D)
@@ -221,6 +226,7 @@ for epoch in range(epochs):
             }
         )
 
+# plt.savefig("./grads.png")
 # plt.savefig("./grads.png")
 
 for vis_mode in range(1, 4):

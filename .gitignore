@@ -12,5 +12,6 @@ train_attention_vis/layer1/*.png
 
 ic1_attention_vis/*.gif
 ic2_attention_vis/*.gif
-icw_attention_vis/*.gif
+iw_attention_vis/*.gif
 train_attention_vis/*.gif
+runs/*

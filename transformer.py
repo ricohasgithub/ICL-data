@@ -79,7 +79,9 @@ class Attention(nn.Module):
         self.W_V = nn.Linear(d_hidden, d_hidden).to(self.device)
         self.W_O = nn.Linear(d_hidden, d_hidden).to(self.device)
 
-    def forward(self, x, y=None, mask=None, layer=-1, vis_mode=-1, epoch=-1):
+    def forward(
+        self, x, y=None, mask=None, layer=-1, vis_mode=-1, epoch=-1, vis_path=""
+    ):
 
         batch_size, seq_len = x.shape[0], x.shape[1]
 
@@ -106,7 +108,9 @@ class Attention(nn.Module):
 
         # Save attention map
         if layer > -1:
-            attention_map_vis(att_dist, layer=layer, vis_mode=vis_mode, epoch=epoch)
+            attention_map_vis(
+                att_dist, vis_path, layer=layer, vis_mode=vis_mode, epoch=epoch
+            )
 
         x = x.transpose(1, 2).contiguous().view(batch_size, -1, self.d_hidden)
         return self.W_O(x)
@@ -130,7 +134,9 @@ class CausalAttention(Attention):
             n_heads, d_hidden, p_dropout, scaling, bias
         )
 
-    def forward(self, x, y=None, mask=None, layer=-1, vis_mode=-1, epoch=-1):
+    def forward(
+        self, x, y=None, mask=None, layer=-1, vis_mode=-1, epoch=-1, vis_path=""
+    ):
         batch_size, seq_len = x.shape[0], x.shape[1]
         t = torch.arange(seq_len).to(self.device)
         causal_mask = (t[:, None] >= t[None, :])[None, None, :, :]
@@ -139,7 +145,13 @@ class CausalAttention(Attention):
         else:
             mask = mask * causal_mask
         return super(CausalAttention, self).forward(
-            x=x, y=y, mask=mask, layer=layer, vis_mode=vis_mode, epoch=epoch
+            x=x,
+            y=y,
+            mask=mask,
+            layer=layer,
+            vis_mode=vis_mode,
+            epoch=epoch,
+            vis_path=vis_path,
         )
 
 
@@ -167,9 +179,17 @@ class TransformerBlock(nn.Module):
             self.n_heads, self.d_hidden, self.p_dropout, self.scaling, self.bias
         ).to(self.device)
 
-    def forward(self, x, y=None, mask=None, layer=-1, vis_mode=-1, epoch=-1):
+    def forward(
+        self, x, y=None, mask=None, layer=-1, vis_mode=-1, epoch=-1, vis_path=""
+    ):
         x = x + self.causal_block(
-            self.layer_norm(x), y, mask, layer=layer, vis_mode=vis_mode, epoch=epoch
+            self.layer_norm(x),
+            y,
+            mask,
+            layer=layer,
+            vis_mode=vis_mode,
+            epoch=epoch,
+            vis_path=vis_path,
         )
         return x
 
@@ -234,12 +254,12 @@ class Transformer(nn.Module):
             print("USING BASE 3 LAYER MLP")
             self.mlp = MLP(n_classes, d_hidden)
 
-    def forward(self, x, epoch=-1, vis_mode=-1):
+    def forward(self, x, epoch=-1, vis_mode=-1, vis_path=""):
 
         for i in range(self.n_layers):
             if epoch % 100 == 0:
                 x = getattr(self, f"transformer_block_{i}")(
-                    x, layer=i, vis_mode=vis_mode, epoch=epoch
+                    x, layer=i, vis_mode=vis_mode, epoch=epoch, vis_path=vis_path
                 )
             else:
                 x = getattr(self, f"transformer_block_{i}")(x, layer=-1)
