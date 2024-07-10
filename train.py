@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from data import get_mus_label_class, generate_input_seqs
 from transformer import Transformer, MLP, Readout
 from util import gen_attention_map_gif, create_image_gif_folder_structure
+import uuid
 
 
 def plot_grad_flow(named_parameters):
@@ -104,9 +105,7 @@ if not use_mlp:
         name=f"Readout, K={K}, L={L}, p_B={p_B}, p_C={p_C}, B={B}, eps={eps}",
     )
 
-    run_path = f"Readout, K={K}, L={L}, p_B={p_B}, p_C={p_C}, B={B}, eps={eps}"
-
-    create_image_gif_folder_structure(run_path)
+    run_path = f"Readout|K={K}|L={L}|p_B={p_B}|p_C={p_C}|B={B}|eps={eps}"
 
     mlp_readout = Readout(L)
     model = Transformer(L, mlp=mlp_readout).to(device)
@@ -117,9 +116,12 @@ else:
         project="icl-data",
         name=f"MLP, K={K}, L={L}, p_B={p_B}, p_C={p_C}, B={B}, eps={eps}",
     )
-    run_path = f"Readout, K={K}, L={L}, p_B={p_B}, p_C={p_C}, B={B}, eps={eps}"
-    create_image_gif_folder_structure(run_path)
+    run_path = f"MLP|K={K}|L={L}|p_B={p_B}|p_C={p_C}|B={B}|eps={eps}"
     model = Transformer(L).to(device)
+
+run_path += f"|{uuid.uuid4()}"
+create_image_gif_folder_structure(run_path)
+
 
 model.train()
 

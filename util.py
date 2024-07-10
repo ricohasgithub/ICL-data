@@ -28,13 +28,13 @@ def attention_map_vis(
         seaborn.heatmap(attention_matrix, xticklabels=classes, yticklabels=classes)
 
     if vis_mode == 0:
-        plt.savefig(f"{path}/train/layer{layer}/attn_map_{epoch}.png")
+        plt.savefig(f"./runs/{path}/train/layer{layer}/attn_map_{epoch}.png")
     elif vis_mode == 1:
-        plt.savefig(f"{path}/icl1/layer{layer}/attn_map_{epoch}.png")
+        plt.savefig(f"./runs/{path}/icl1/layer{layer}/attn_map_{epoch}.png")
     elif vis_mode == 2:
-        plt.savefig(f"{path}/icl2/layer{layer}/attn_map_{epoch}.png")
+        plt.savefig(f"./runs/{path}/icl2/layer{layer}/attn_map_{epoch}.png")
     elif vis_mode == 3:
-        plt.savefig(f"{path}/iwl/layer{layer}/attn_map_{epoch}.png")
+        plt.savefig(f"./runs/{path}/iwl/layer{layer}/attn_map_{epoch}.png")
 
     plt.close()
 
@@ -51,23 +51,28 @@ def gen_attention_map_gif(path, vis_mode=-1, layer=-1):
         folder = "iwl"
 
     images = []
-    files = os.listdir(f"{path}/{folder}/layer{layer}/")
+    files = os.listdir(f"./runs/{path}/{folder}/layer{layer}/")
     files = [file for file in files if file.endswith(".png")]
     files.sort(key=lambda file: int(file[9 : file.index(".")]))
 
     for filename in files:
         if filename.endswith(".png"):
             # print(filename)
-            images.append(imageio.imread(f"{path}/{folder}/layer{layer}/{filename}"))
+            images.append(
+                imageio.imread(f"./runs/{path}/{folder}/layer{layer}/{filename}")
+            )
 
-    imageio.mimsave(f"{path}/{folder}/layer{layer}.gif", images, duration=0.25)
+    imageio.mimsave(f"./runs/{path}/{folder}/layer{layer}.gif", images, duration=0.25)
 
 
 def create_image_gif_folder_structure(run_name):
 
-    os.makedirs(f"./runs/{run_name}/icl1/layer0/")
-    os.makedirs(f"./runs/{run_name}/icl1/layer1/")
-    os.makedirs(f"./runs/{run_name}/icl2/layer0/")
-    os.makedirs(f"./runs/{run_name}/icl2/layer1/")
-    os.makedirs(f"./runs/{run_name}/iwl/layer0/")
-    os.makedirs(f"./runs/{run_name}/iwl/layer1/")
+    try:
+        os.makedirs(f"./runs/{run_name}/icl1/layer0/")
+        os.makedirs(f"./runs/{run_name}/icl1/layer1/")
+        os.makedirs(f"./runs/{run_name}/icl2/layer0/")
+        os.makedirs(f"./runs/{run_name}/icl2/layer1/")
+        os.makedirs(f"./runs/{run_name}/iwl/layer0/")
+        os.makedirs(f"./runs/{run_name}/iwl/layer1/")
+    except:
+        print(f"{run_name} already exists.")
