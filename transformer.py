@@ -227,9 +227,11 @@ class Transformer(nn.Module):
                 ).to(self.device),
             )
 
-        if mlp:
+        if mlp is not None:
+            print("NOT USING MLP")
             self.mlp = mlp
         else:
+            print("USING BASE 3 LAYER MLP")
             self.mlp = MLP(n_classes, d_hidden)
 
     def forward(self, x, epoch=-1, vis_mode=-1):

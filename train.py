@@ -13,12 +13,6 @@ from data import get_mus_label_class, generate_input_seqs
 from transformer import Transformer, MLP, Readout
 from util import gen_attention_map_gif
 
-wandb.init(
-    # Set the wandb project where this run will be logged
-    project="icl-data",
-)
-
-
 def plot_grad_flow(named_parameters):
 
     ave_grads = []
@@ -48,7 +42,7 @@ def plot_grad_flow(named_parameters):
 
 epochs = 25000
 
-K = 512
+K = 256
 L = 32
 S = 10000
 N = 8
@@ -69,6 +63,8 @@ p_C = 0.75
 
 batchsize = 128
 no_repeats = False
+
+use_mlp = False
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 loss_fn = nn.CrossEntropyLoss()
@@ -97,13 +93,30 @@ def accuracy(model, inputs, labels, epoch=-1, vis_mode=-1, flip_labels=False):
     return correct.mean().item()
 
 
-mlp_readout = Readout(L)
-model = Transformer(L, mlp=mlp_readout).to(device)
-# model = Transformer(L).to(device)
+if not use_mlp:
+
+    wandb.init(
+        # Set the wandb project where this run will be logged
+        project="icl-data",
+        name=f"Readout, K={K}, L={L}, p_B={p_B}, p_C={p_C}, B={B}, eps={eps}"
+    )
+
+    mlp_readout = Readout(L)
+    model = Transformer(L, mlp=mlp_readout).to(device)
+else:
+    
+    wandb.init(
+        # Set the wandb project where this run will be logged
+        project="icl-data",
+        name=f"MLP, K={K}, L={L}, p_B={p_B}, p_C={p_C}, B={B}, eps={eps}"
+    )
+
+    model = Transformer(L).to(device)
+
 model.train()
 
-optim = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-6)
-# optim = optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-6)
+# optim = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-6)
+optim = optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-6)
 mus_label, mus_class, labels_class = get_mus_label_class(K, L, D)
 
 test_inputs, test_labels = generate_input_seqs(
@@ -221,6 +234,11 @@ for epoch in range(epochs):
             }
         )
 
+# plt.savefig("./grads.png")
+
+for vis_mode in range(1, 4):
+    for layer in range(2):
+        gen_attention_map_gif(vis_mode=vis_mode, layer=layer)
     if epoch % 1000 == 0:
         for vis_mode in range(1, 4):
             for layer in range(2):
