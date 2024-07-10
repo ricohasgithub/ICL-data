@@ -1,1 +1,0 @@
-# IC Layer 1 Attention Figures

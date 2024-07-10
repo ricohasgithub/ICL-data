@@ -1,1 +1,0 @@
-# IW Layer 1 Attention Figures

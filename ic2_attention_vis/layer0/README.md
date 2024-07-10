@@ -1,1 +1,0 @@
-# IC2 Layer 0 Attention Figures

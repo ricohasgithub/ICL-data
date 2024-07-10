@@ -1,1 +1,0 @@
-# IC Layer 0 Attention Figures
