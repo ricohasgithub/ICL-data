@@ -42,7 +42,7 @@ def plot_grad_flow(named_parameters):
 
 epochs = 25000
 
-K = 512
+K = 256
 L = 32
 S = 10000
 N = 8

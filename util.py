@@ -18,7 +18,7 @@ def attention_map_vis(attention_matrix, classes=None, layer=0, vis_mode=-1, epoc
     attention_matrix = attention_matrix[0][0]
 
     plt.figure()
-    plt.title(f"Attention Map {epoch}")
+    plt.title(f"{epoch} Attention Map")
 
     if classes == None:
         seaborn.heatmap(attention_matrix)
