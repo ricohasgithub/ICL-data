@@ -127,6 +127,80 @@ class Attention(nn.Module):
         return torch.matmul(att_dist, V), att_dist
 
 
+class DisentangledAttention(nn.Module):
+
+    "Implements Standard MultiHeadAttention"
+
+    def __init__(self, n_heads=8, d_hidden=64, p_dropout=0.0, scaling=1.0, bias=True):
+
+        super(DisentangledAttention, self).__init__()
+
+        self.device = torch.device(
+            "cuda"
+            if torch.cuda.is_available()
+            else "cpu"
+            # else "mps" if torch.backends.mps.is_available() else "cpu"
+        )
+
+        self.n_heads = n_heads
+        self.d_hidden = d_hidden
+        self.p_dropout = p_dropout
+        self.scaling = scaling
+        self.bias = bias
+
+        self.W_QK = nn.Linear(d_hidden, d_hidden).to(self.device)
+        # self.W_Q = nn.Linear(d_hidden, d_hidden).to(self.device)
+        # self.W_K = nn.Linear(d_hidden, d_hidden).to(self.device)
+        self.W_V = nn.Linear(d_hidden, d_hidden).to(self.device)
+
+    def forward(
+        self, x, y=None, mask=None, layer=-1, vis_mode=-1, epoch=-1, vis_path=""
+    ):
+
+        batch_size, seq_len = x.shape[0], x.shape[1]
+
+        if y is None:
+            y = x
+
+        A = (
+            self.W_QK(x)
+            .view(batch_size, -1, self.n_heads, self.d_hidden // self.n_heads)
+            .transpose(1, 2)
+        )
+
+        A = torch.matmul(x[:, None, :, :], A.transpose(-2, -1))
+
+        V = (
+            self.W_V(x)
+            .view(batch_size, -1, self.n_heads, self.d_hidden // self.n_heads)
+            .transpose(1, 2)
+        )
+
+        x, att_dist = self.attention(A, V, mask)
+
+        # Save attention map
+        if layer > -1:
+            attention_map_vis(
+                att_dist, vis_path, layer=layer, vis_mode=vis_mode, epoch=epoch
+            )
+
+        x = x.transpose(1, 2).contiguous().view(batch_size, -1, self.d_hidden)
+
+        return x
+
+    def attention(self, A, V, mask=None):
+
+        d_K = A.size(-1)
+        att_scores = A / math.sqrt(d_K)
+
+        if mask is not None:
+            att_scores = att_scores.masked_fill(mask == 0, -1e9)
+
+        att_dist = att_scores.softmax(dim=-1)
+
+        return torch.matmul(att_dist, V), att_dist
+
+
 class CausalAttention(Attention):
 
     def __init__(self, n_heads=8, d_hidden=64, p_dropout=0.0, scaling=1.0, bias=True):
@@ -145,6 +219,34 @@ class CausalAttention(Attention):
         else:
             mask = mask * causal_mask
         return super(CausalAttention, self).forward(
+            x=x,
+            y=y,
+            mask=mask,
+            layer=layer,
+            vis_mode=vis_mode,
+            epoch=epoch,
+            vis_path=vis_path,
+        )
+
+
+class DisentangledCausalAttention(DisentangledAttention):
+
+    def __init__(self, n_heads=8, d_hidden=64, p_dropout=0.0, scaling=1.0, bias=True):
+        super(DisentangledCausalAttention, self).__init__(
+            n_heads, d_hidden, p_dropout, scaling, bias
+        )
+
+    def forward(
+        self, x, y=None, mask=None, layer=-1, vis_mode=-1, epoch=-1, vis_path=""
+    ):
+        batch_size, seq_len = x.shape[0], x.shape[1]
+        t = torch.arange(seq_len).to(self.device)
+        causal_mask = (t[:, None] >= t[None, :])[None, None, :, :]
+        if mask is None:
+            mask = torch.broadcast_to(causal_mask, (batch_size, 1, seq_len, seq_len))
+        else:
+            mask = mask * causal_mask
+        return super(DisentangledCausalAttention, self).forward(
             x=x,
             y=y,
             mask=mask,
@@ -191,6 +293,39 @@ class TransformerBlock(nn.Module):
             epoch=epoch,
             vis_path=vis_path,
         )
+        return x
+
+
+class DisentangledTransformerBlock(nn.Module):
+
+    def __init__(self, n_heads=1, d_hidden=128, p_dropout=0.0, scaling=1.0, bias=True):
+        super(DisentangledTransformerBlock, self).__init__()
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.n_heads = n_heads
+        self.d_hidden = d_hidden
+        self.p_dropout = p_dropout
+        self.scaling = scaling
+        self.bias = bias
+
+        self.layer_norm = LayerNorm(self.d_hidden).to(self.device)
+        self.causal_block = DisentangledCausalAttention(
+            self.n_heads, self.d_hidden, self.p_dropout, self.scaling, self.bias
+        ).to(self.device)
+
+    def forward(
+        self, x, y=None, mask=None, layer=-1, vis_mode=-1, epoch=-1, vis_path=""
+    ):
+        attention_output = self.causal_block(
+            self.layer_norm(x),
+            y,
+            mask,
+            layer=layer,
+            vis_mode=vis_mode,
+            epoch=epoch,
+            vis_path=vis_path,
+        )
+        x = torch.cat([x, attention_output], dim=-1)
         return x
 
 
@@ -264,6 +399,60 @@ class Transformer(nn.Module):
             else:
                 x = getattr(self, f"transformer_block_{i}")(x, layer=-1)
 
+        x = self.layer_norm(x)
+        x = self.mlp(x)
+        return x
+
+
+class DisentangledTransformer(nn.Module):
+
+    def __init__(
+        self, n_classes, n_layers=2, n_heads=1, p_dropout=0.0, d_hidden=128, mlp=None
+    ):
+        super(DisentangledTransformer, self).__init__()
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.n_classes = n_classes
+        self.n_layers = n_layers
+        self.n_heads = n_heads
+        self.p_dropout = p_dropout
+        self.d_hidden = d_hidden
+
+        self.layer_norm = LayerNorm(self.d_hidden)
+        for i in range(self.n_layers):
+            setattr(
+                self,
+                f"transformer_block_{i}",
+                DisentangledTransformerBlock(
+                    n_heads=self.n_heads,
+                    d_hidden=self.d_hidden * ((1 + self.n_heads) ** (i)),
+                    p_dropout=self.p_dropout,
+                ).to(self.device),
+            )
+
+        self.W_O = nn.Linear(
+            d_hidden * ((1 + self.n_heads) ** (self.n_layers)), d_hidden
+        ).to(self.device)
+
+        if mlp is not None:
+            print("NOT USING MLP")
+            self.mlp = mlp
+        else:
+            print("USING BASE 3 LAYER MLP")
+            self.mlp = MLP(n_classes, d_hidden)
+
+    def forward(self, x, epoch=-1, vis_mode=-1, vis_path=""):
+
+        for i in range(self.n_layers):
+            if epoch % 100 == 0:
+                x = getattr(self, f"transformer_block_{i}")(
+                    x, layer=i, vis_mode=vis_mode, epoch=epoch, vis_path=vis_path
+                )
+            else:
+                x = getattr(self, f"transformer_block_{i}")(x, layer=-1)
+
+        x = self.W_O(x)
         x = self.layer_norm(x)
         x = self.mlp(x)
         return x

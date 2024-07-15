@@ -10,7 +10,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 from data import get_mus_label_class, generate_input_seqs
-from transformer import Transformer, MLP, Readout
+from transformer import Transformer, MLP, Readout, DisentangledTransformer
 from util import gen_attention_map_gif, create_image_gif_folder_structure
 import uuid
 
@@ -60,8 +60,8 @@ P = 1.0 / (np.arange(1, K + 1) ** alpha)
 P /= np.sum(P)
 
 B = 1
-p_B = 0.75
-p_C = 0.75
+p_B = 0.4375
+p_C = 0.4375
 
 batchsize = 128
 no_repeats = False
@@ -108,7 +108,7 @@ if not use_mlp:
     run_path = f"Readout|K={K}|L={L}|p_B={p_B}|p_C={p_C}|B={B}|eps={eps}"
 
     mlp_readout = Readout(L)
-    model = Transformer(L, mlp=mlp_readout).to(device)
+    model = DisentangledTransformer(L, mlp=mlp_readout).to(device)
 else:
 
     wandb.init(
@@ -117,10 +117,12 @@ else:
         name=f"MLP, K={K}, L={L}, p_B={p_B}, p_C={p_C}, B={B}, eps={eps}",
     )
     run_path = f"MLP|K={K}|L={L}|p_B={p_B}|p_C={p_C}|B={B}|eps={eps}"
-    model = Transformer(L).to(device)
+    model = DisentangledTransformer(L).to(device)
 
 run_path += f"|{uuid.uuid4()}"
 create_image_gif_folder_structure(run_path)
+
+model_save_path = "./runs/" + run_path + "/model/"
 
 
 model.train()
@@ -187,6 +189,8 @@ test_inputs_iw, test_labels_iw = generate_input_seqs(
     no_repeats=no_repeats,
 )
 
+print("Running experiment " + run_path)
+
 for epoch in range(epochs):
 
     optim.zero_grad()
@@ -214,6 +218,9 @@ for epoch in range(epochs):
 
     print(f"Epoch: {epoch}, Loss: {loss.item()}")
     wandb.log({"epoch": epoch, "train_loss": loss})
+
+    if epoch % 1000 == 0:
+        torch.save(model.state_dict(), model_save_path + f"model_{epoch}")
 
     if epoch % 10 == 0:
         acc_test = accuracy(
@@ -245,7 +252,7 @@ for epoch in range(epochs):
             vis_path=run_path,
         )
         print(
-            f"Test acc: {acc_test}, IC acc: {acc_ic}, IC acc2: {acc_ic2}, IW acc: {acc_iw}"
+            f"Test acc: {round(acc_test, 4)}, IC acc: {round(acc_ic, 4)}, IC acc2: {round(acc_ic2, 4)}, IW acc: {round(acc_iw, 4)}"
         )
         wandb.log(
             {
@@ -256,6 +263,7 @@ for epoch in range(epochs):
                 "iw_acc": acc_iw,
             }
         )
+
 
 # plt.savefig("./grads.png")
 

@@ -74,5 +74,34 @@ def create_image_gif_folder_structure(run_name):
         os.makedirs(f"./runs/{run_name}/icl2/layer1/")
         os.makedirs(f"./runs/{run_name}/iwl/layer0/")
         os.makedirs(f"./runs/{run_name}/iwl/layer1/")
+        os.makedirs(f"./runs/{run_name}/model/")
     except:
         print(f"{run_name} already exists.")
+
+
+def vis_attention_weights(layer0_weights, layer1_weights, save_dir="", model_name=""):
+    plt.figure(figsize=(14, 6))
+
+    plt.subplot(1, 2, 1)
+
+    plt.title("Layer 1 Weights")
+
+    seaborn.heatmap(layer0_weights)
+
+    plt.subplot(1, 2, 2)
+
+    plt.title("Layer 2 Weights")
+    seaborn.heatmap(layer1_weights)
+
+    if save_dir == "":
+        plt.show()
+    else:
+
+        try:
+            os.makedirs(f"{save_dir}")
+        except:
+            print(save_dir + " already exists.")
+
+        plt.savefig(save_dir + f"{model_name}_weights_vis.png")
+
+    plt.close()
