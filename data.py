@@ -184,7 +184,9 @@ def generate_input_seqs(
         * (mus_class_new[targets_c] + eps * np.random.normal(size=(S, D)) / np.sqrt(D))
     )[~filt_C]
 
-    shifts = np.random.choice((2 * Nmax + 1) - (2 * N + 1) + 1, size=(S))
+    shifts = np.zeros(shape=(S)).astype(
+        int
+    )  # np.random.choice((2 * Nmax + 1) - (2 * N + 1) + 1, size=(S))
 
     labels = np.zeros((S, L), dtype=bool)
     target_classes = np.zeros(S, dtype=int)
@@ -200,6 +202,12 @@ def generate_input_seqs(
         inputs[s, :, shifts[s] : shifts[s] + 2 * N + 1] = np.identity(2 * N + 1)
 
     if output_target_labels:
-        return torch.tensor(inputs, dtype=torch.float32), torch.tensor(labels, dtype=torch.float32), target_classes
+        return (
+            torch.tensor(inputs, dtype=torch.float32),
+            torch.tensor(labels, dtype=torch.float32),
+            target_classes,
+        )
     else:
-        return torch.tensor(inputs, dtype=torch.float32), torch.tensor(labels, dtype=torch.float32)
+        return torch.tensor(inputs, dtype=torch.float32), torch.tensor(
+            labels, dtype=torch.float32
+        )

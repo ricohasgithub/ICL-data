@@ -22,7 +22,6 @@ from util import (
     create_image_gif_folder_structure,
     vis_attention_weights,
     svd_attention_weights,
-    vis_output,
 )
 import uuid
 
@@ -54,7 +53,8 @@ def plot_grad_flow(named_parameters):
     plt.grid(True)
 
 
-epochs = 10000
+epochs = 1000
+
 
 K = 512
 L = 32
@@ -71,9 +71,14 @@ alpha = 0
 P = 1.0 / (np.arange(1, K + 1) ** alpha)
 P /= np.sum(P)
 
-B = 4
-p_B = 0.5
-p_C = 0.5
+B = 1
+p_C = 1
+p_B = 0
+
+epochs_icl = 2000
+epochs_icl_1 = 1000
+
+epochs_iwl = 2000
 
 batchsize = 128
 no_repeats = False
@@ -99,8 +104,6 @@ def accuracy(
     inputs, labels = inputs.to(device), labels.to(device)
     outputs = model(inputs, epoch=epoch, vis_mode=vis_mode, vis_path=vis_path)
 
-    # if vis_mode == 1:
-    #     vis_output(vis_path, outputs, labels, inputs, epoch)
     label_preds = F.softmax(outputs, dim=-1)
     label_preds_inds = torch.argmax(label_preds, dim=1)
     label_inds = torch.argmax(labels, dim=1)
@@ -112,38 +115,18 @@ def accuracy(
     return correct.mean().item()
 
 
-if not use_mlp:
+wandb.init(
+    # Set the wandb project where this run will be logged
+    project="icl-data",
+    name=f"Readout, K={K}, L={L}, p_B={p_B}, p_C={p_C}, epochs_icl={epochs_icl}, epochs_iwl={epochs_iwl}, B={B}, eps={eps}",
+)
 
-    wandb.init(
-        # Set the wandb project where this run will be logged
-        project="icl-data",
-        name=f"Readout, K={K}, L={L}, p_B={p_B}, p_C={p_C}, B={B}, eps={eps}",
-    )
+run_path = f"Readout|K={K}|L={L}|p_B={p_B}|p_C={p_C}|epochs_icl={epochs_icl}|epochs_iwl={epochs_iwl}|B={B}|eps={eps}"
 
-    run_path = f"Readout|K={K}|L={L}|p_B={p_B}|p_C={p_C}|B={B}|eps={eps}"
+mlp_readout = Readout(L)
 
-    mlp_readout = Readout(L)
 
-    if not use_disentangled:
-        model = Transformer(L, mlp=mlp_readout).to(device)
-    else:
-        # model = DisentangledTransformer(L, mlp=mlp_readout).to(device)
-        model = RestrictedDisentangledTransformer(L, mlp=mlp_readout).to(device)
-else:
-
-    wandb.init(
-        # Set the wandb project where this run will be logged
-        project="icl-data",
-        name=f"MLP, K={K}, L={L}, p_B={p_B}, p_C={p_C}, B={B}, eps={eps}",
-    )
-    run_path = f"MLP|K={K}|L={L}|p_B={p_B}|p_C={p_C}|B={B}|eps={eps}"
-
-    if not use_disentangled:
-        model = Transformer(L).to(device)
-    else:
-        # model = DisentangledTransformer(L).to(device)
-        model = RestrictedDisentangledTransformer(L).to(device)
-
+model = RestrictedDisentangledTransformer(L, mlp=mlp_readout).to(device)
 
 run_path += f"|{uuid.uuid4()}"
 
@@ -156,7 +139,6 @@ create_image_gif_folder_structure(run_path)
 
 model_save_path = "./runs/" + run_path + "/model/"
 
-
 model.train()
 
 # optim = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-6)
@@ -166,10 +148,18 @@ other_params = [p for name, p in model.named_parameters() if "W_O" not in name]
 
 
 optim = optim.SGD(
-    [{"params": other_params}, {"params": out_param, "weight_decay": 0.000}],
+    [
+        {"params": other_params},
+        {
+            "params": out_param,
+            "weight_decay": 0.0005,
+            "lr": 0.5,
+        },
+    ],
     lr=1e-1,
     weight_decay=1e-6,
 )
+# optim = optim.SGD(model.parameters(), lr=1e-1)
 mus_label, mus_class, labels_class = get_mus_label_class(K, L, D)
 
 with open(f"./runs/{run_path}/mus_label.npy", "wb") as f:
@@ -239,7 +229,122 @@ test_inputs_iw, test_labels_iw = generate_input_seqs(
 
 print("Running experiment " + run_path)
 
-for epoch in range(epochs):
+
+print("ICL Phase: Stage 1")
+
+for epoch in range(epochs_icl_1):
+    if epoch % 50 == 0:
+        torch.save(model.state_dict(), model_save_path + f"model_{epoch}")
+        model_params = model.state_dict()
+
+        if use_disentangled:
+            QK0 = model_params["transformer_block_0.causal_block.W_QK.weight"]
+            QK1 = model_params["transformer_block_1.causal_block.W_QK.weight"]
+
+            W_O = model_params["W_O.weight"]
+
+            vis_attention_weights(
+                QK0.cpu().detach().numpy(),
+                QK1.cpu().detach().numpy(),
+                W_O.cpu().detach().numpy(),
+                save_dir="./disentangled_model_plots/" + run_path + "/",
+                model_name=f"model_{epoch}",
+                hyper_params={"p_B": p_B, "p_C": p_C},
+            )
+
+            svd_attention_weights(
+                QK1.cpu()
+                .detach()
+                .numpy()[model.P : model.P + model.D, 2 * model.P + model.D :],
+                layer=2,
+                save_file_name=f"model_{epoch}",
+                save_dir="./disentangled_model_plots/" + run_path + "/",
+                model_name=f"model_{epoch}",
+                hyper_params={"p_B": p_B, "p_C": p_C},
+            )
+
+    optim.zero_grad()
+    inputs_batch, labels_batch, target_classes = generate_input_seqs(
+        mus_label,
+        mus_class,
+        labels_class,
+        batchsize,
+        N,
+        N,
+        eps=eps,
+        P=P,
+        B=B,
+        p_B=p_B,
+        p_C=p_C,
+        output_target_labels=True,
+        no_repeats=no_repeats,
+    )
+
+    loss = criterion(model, inputs_batch, labels_batch, -1)
+    loss.backward()
+
+    if use_disentangled:
+
+        model.transformer_block_0.causal_block.W_QK.weight.grad[:, :] = 0
+        model.transformer_block_1.causal_block.W_QK.weight.grad[:, :] = 0
+
+        model.transformer_block_0.causal_block.W_V.weight.grad[:, :] = 0
+        model.transformer_block_1.causal_block.W_V.weight.grad[:, :] = 0
+
+        out_mask = torch.zeros_like(model.W_O.weight)
+        # out_mask[:L, model.P : model.P + model.D] = 1
+        out_mask[:L, 3 * model.P + 2 * model.D : 3 * model.P + 3 * model.D] = 1
+        model.W_O.weight.grad[:, :] = model.W_O.weight.grad * out_mask
+
+    optim.step()
+
+    print(f"Epoch: {epoch}, Loss: {loss.item()}")
+    wandb.log({"epoch": epoch, "train_loss": loss})
+
+    if epoch % 10 == 0:
+        acc_test = accuracy(
+            model, test_inputs, test_labels, epoch=-1, vis_mode=-1, vis_path=run_path
+        )
+        acc_ic = accuracy(
+            model,
+            test_inputs_ic,
+            test_labels_ic,
+            epoch=epoch,
+            vis_mode=1,
+            vis_path=run_path,
+        )
+        acc_ic2 = accuracy(
+            model,
+            test_inputs_ic2,
+            test_labels_ic2,
+            epoch=epoch,
+            vis_mode=2,
+            flip_labels=True,
+            vis_path=run_path,
+        )
+        acc_iw = accuracy(
+            model,
+            test_inputs_iw,
+            test_labels_iw,
+            epoch=epoch,
+            vis_mode=3,
+            vis_path=run_path,
+        )
+        print(
+            f"Test acc: {round(acc_test, 4)}, IC acc: {round(acc_ic, 4)}, IC acc2: {round(acc_ic2, 4)}, IW acc: {round(acc_iw, 4)}"
+        )
+        wandb.log(
+            {
+                "eval_epoch": epoch,
+                "test_acc": acc_test,
+                "ic1_acc": acc_ic,
+                "ic2_acc": acc_ic2,
+                "iw_acc": acc_iw,
+            }
+        )
+
+print("ICL Phase: Stage 2")
+for epoch in range(epochs_icl_1, epochs_icl):
 
     if epoch % 50 == 0:
         torch.save(model.state_dict(), model_save_path + f"model_{epoch}")
@@ -292,6 +397,7 @@ for epoch in range(epochs):
     loss.backward()
 
     if use_disentangled:
+
         model.transformer_block_0.causal_block.W_QK.weight.grad[
             model.P :, : model.P
         ] = 0
@@ -303,20 +409,20 @@ for epoch in range(epochs):
             model.P :, model.P :
         ] = 0
 
-        model.transformer_block_0.causal_block.W_V.weight.grad[:, :] = 0
-        model.transformer_block_1.causal_block.W_V.weight.grad[:, :] = 0
-
         mask1 = torch.zeros_like(model.transformer_block_1.causal_block.W_QK.weight)
         mask1[model.P : model.P + model.D, 2 * model.P + model.D :] = 1
-
         model.transformer_block_1.causal_block.W_QK.weight.grad = (
             model.transformer_block_1.causal_block.W_QK.weight.grad * mask1
         )
 
+        model.transformer_block_0.causal_block.W_V.weight.grad[:, :] = 0
+        model.transformer_block_1.causal_block.W_V.weight.grad[:, :] = 0
+
         out_mask = torch.zeros_like(model.W_O.weight)
         # out_mask[:L, model.P : model.P + model.D] = 1
-        out_mask[:L, 3 * model.P + 2 * model.D : 3 * model.P + 3 * model.D] = 1
+        # out_mask[:L, 3 * model.P + 2 * model.D : 3 * model.P + 3 * model.D] = 1
         model.W_O.weight.grad[:, :] = model.W_O.weight.grad * out_mask
+
     optim.step()
 
     print(f"Epoch: {epoch}, Loss: {loss.item()}")
@@ -363,6 +469,122 @@ for epoch in range(epochs):
                 "iw_acc": acc_iw,
             }
         )
+
+print("IWL Phase")
+
+for epoch in range(epochs_icl, epochs_icl + epochs_iwl):
+
+    if epoch % 50 == 0:
+        torch.save(model.state_dict(), model_save_path + f"model_{epoch}")
+        model_params = model.state_dict()
+
+        if use_disentangled:
+            QK0 = model_params["transformer_block_0.causal_block.W_QK.weight"]
+            QK1 = model_params["transformer_block_1.causal_block.W_QK.weight"]
+
+            W_O = model_params["W_O.weight"]
+
+            vis_attention_weights(
+                QK0.cpu().detach().numpy(),
+                QK1.cpu().detach().numpy(),
+                W_O.cpu().detach().numpy(),
+                save_dir="./disentangled_model_plots/" + run_path + "/",
+                model_name=f"model_{epoch}",
+                hyper_params={"p_B": p_B, "p_C": p_C},
+            )
+
+            svd_attention_weights(
+                QK1.cpu()
+                .detach()
+                .numpy()[model.P : model.P + model.D, 2 * model.P + model.D :],
+                layer=2,
+                save_file_name=f"model_{epoch}",
+                save_dir="./disentangled_model_plots/" + run_path + "/",
+                model_name=f"model_{epoch}",
+                hyper_params={"p_B": p_B, "p_C": p_C},
+            )
+
+    optim.zero_grad()
+    inputs_batch, labels_batch, target_classes = generate_input_seqs(
+        mus_label,
+        mus_class,
+        labels_class,
+        batchsize,
+        N,
+        N,
+        eps=eps,
+        P=P,
+        B=B,
+        p_B=p_B,
+        p_C=p_C,
+        output_target_labels=True,
+        no_repeats=no_repeats,
+    )
+
+    loss = criterion(model, inputs_batch, labels_batch, -1)
+    loss.backward()
+
+    if use_disentangled:
+
+        model.transformer_block_0.causal_block.W_QK.weight.grad[:, :] = 0
+        model.transformer_block_1.causal_block.W_QK.weight.grad[:, :] = 0
+
+        model.transformer_block_0.causal_block.W_V.weight.grad[:, :] = 0
+        model.transformer_block_1.causal_block.W_V.weight.grad[:, :] = 0
+
+        out_mask = torch.zeros_like(model.W_O.weight)
+        # out_mask[:L, model.P : model.P + model.D] = 1
+        out_mask[:L, 3 * model.P + 2 * model.D : 3 * model.P + 3 * model.D] = 1
+        model.W_O.weight.grad[:, :] = model.W_O.weight.grad * out_mask
+
+    # plot_grad_flow(model.named_parameters())
+    optim.step()
+
+    print(f"Epoch: {epoch}, Loss: {loss.item()}")
+    wandb.log({"epoch": epoch, "train_loss": loss})
+
+    if epoch % 10 == 0:
+        acc_test = accuracy(
+            model, test_inputs, test_labels, epoch=-1, vis_mode=-1, vis_path=run_path
+        )
+        acc_ic = accuracy(
+            model,
+            test_inputs_ic,
+            test_labels_ic,
+            epoch=epoch,
+            vis_mode=1,
+            vis_path=run_path,
+        )
+        acc_ic2 = accuracy(
+            model,
+            test_inputs_ic2,
+            test_labels_ic2,
+            epoch=epoch,
+            vis_mode=2,
+            flip_labels=True,
+            vis_path=run_path,
+        )
+        acc_iw = accuracy(
+            model,
+            test_inputs_iw,
+            test_labels_iw,
+            epoch=epoch,
+            vis_mode=3,
+            vis_path=run_path,
+        )
+        print(
+            f"Test acc: {round(acc_test, 4)}, IC acc: {round(acc_ic, 4)}, IC acc2: {round(acc_ic2, 4)}, IW acc: {round(acc_iw, 4)}"
+        )
+        wandb.log(
+            {
+                "eval_epoch": epoch,
+                "test_acc": acc_test,
+                "ic1_acc": acc_ic,
+                "ic2_acc": acc_ic2,
+                "iw_acc": acc_iw,
+            }
+        )
+
 
 torch.save(model.state_dict(), model_save_path + f"model_{epoch}")
 

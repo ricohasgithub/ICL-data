@@ -28,7 +28,7 @@ class SequenceEmbedder(nn.Module):
         batch_size, N, D = examples.size()
         pos_encoding = torch.zeros(batch_size, 2 * N + 1, self.P)
 
-        start_index = random.randint(0, self.P - (2 * N + 1))
+        start_index = 0  # random.randint(0, self.P - (2 * N + 1))
         one_hot_indices = torch.arange(start_index, start_index + (2 * N + 1))
         pos_encoding.scatter_(2, one_hot_indices.unsqueeze(2), 1)
 
@@ -148,10 +148,10 @@ class DisentangledAttention(nn.Module):
         self.scaling = scaling
         self.bias = bias
 
-        self.W_QK = nn.Linear(d_hidden, d_hidden).to(self.device)
-        # self.W_Q = nn.Linear(d_hidden, d_hidden).to(self.device)
-        # self.W_K = nn.Linear(d_hidden, d_hidden).to(self.device)
-        self.W_V = nn.Linear(d_hidden, d_hidden).to(self.device)
+        self.W_QK = nn.Linear(d_hidden, d_hidden, bias=False).to(self.device)
+        torch.nn.init.normal_(self.W_QK.weight, mean=0, std=1e-3)
+
+        self.W_V = nn.Linear(d_hidden, d_hidden, bias=False).to(self.device)
 
     def forward(
         self, x, y=None, mask=None, layer=-1, vis_mode=-1, epoch=-1, vis_path=""
@@ -307,7 +307,6 @@ class DisentangledTransformerBlock(nn.Module):
         self.p_dropout = p_dropout
         self.scaling = scaling
         self.bias = bias
-
         self.layer_norm = LayerNorm(self.d_hidden).to(self.device)
         self.causal_block = DisentangledCausalAttention(
             self.n_heads, self.d_hidden, self.p_dropout, self.scaling, self.bias
@@ -434,6 +433,103 @@ class DisentangledTransformer(nn.Module):
         self.W_O = nn.Linear(
             d_hidden * ((1 + self.n_heads) ** (self.n_layers)), d_hidden
         ).to(self.device)
+
+        if mlp is not None:
+            print("NOT USING MLP")
+            self.mlp = mlp
+        else:
+            print("USING BASE 3 LAYER MLP")
+            self.mlp = MLP(n_classes, d_hidden)
+
+    def forward(self, x, epoch=-1, vis_mode=-1, vis_path=""):
+
+        for i in range(self.n_layers):
+            if epoch % 100 == 0:
+                x = getattr(self, f"transformer_block_{i}")(
+                    x, layer=i, vis_mode=vis_mode, epoch=epoch, vis_path=vis_path
+                )
+            else:
+                x = getattr(self, f"transformer_block_{i}")(x, layer=-1)
+
+        x = self.W_O(x)
+        x = self.layer_norm(x)
+        x = self.mlp(x)
+        return x
+
+
+class RestrictedDisentangledTransformer(nn.Module):
+
+    def __init__(
+        self,
+        n_classes,
+        n_layers=2,
+        n_heads=1,
+        p_dropout=0.0,
+        d_hidden=128,
+        mlp=None,
+        P=17,
+        D=63,
+    ):
+        super(RestrictedDisentangledTransformer, self).__init__()
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.n_classes = n_classes
+        self.n_layers = n_layers
+        self.n_heads = n_heads
+        self.p_dropout = p_dropout
+        self.d_hidden = P + D
+        self.P = P
+        self.D = D
+
+        # self.layer_norm = LayerNorm(self.d_hidden)
+        self.layer_norm = LayerNorm(self.n_classes)
+
+        for i in range(self.n_layers):
+            setattr(
+                self,
+                f"transformer_block_{i}",
+                DisentangledTransformerBlock(
+                    n_heads=self.n_heads,
+                    d_hidden=self.d_hidden * ((1 + self.n_heads) ** (i)),
+                    p_dropout=self.p_dropout,
+                ).to(self.device),
+            )
+
+        # self.W_O = nn.Linear(
+        #     self.d_hidden * ((1 + self.n_heads) ** (self.n_layers)), self.d_hidden
+        # ).to(self.device)
+
+        self.W_O = nn.Linear(
+            self.d_hidden * ((1 + self.n_heads) ** (self.n_layers)), self.n_classes
+        ).to(self.device)
+
+        with torch.no_grad():
+            # self.transformer_block_0.causal_block.W_QK.weight[P:, :P] = 0
+            # self.transformer_block_0.causal_block.W_QK.weight[:P, P:] = 0
+            # self.transformer_block_0.causal_block.W_QK.weight[P:, P:] = 0
+
+            self.transformer_block_0.causal_block.W_QK.weight[:, :] = 0
+
+            self.transformer_block_0.causal_block.W_V.weight[:, :] = torch.eye(P + D)
+            self.transformer_block_1.causal_block.W_V.weight[:, :] = torch.eye(
+                (P + D) * 2
+            )
+
+            mask1 = torch.zeros_like(self.transformer_block_1.causal_block.W_QK.weight)
+            mask1[P : P + D, 2 * P + D :] = torch.eye(D)
+
+            self.transformer_block_1.causal_block.W_QK.weight[:, :] = mask1 * 0.001
+            # self.transformer_block_1.causal_block.W_QK.weight[:, :] = (
+            #     self.transformer_block_1.causal_block.W_QK.weight * mask1
+            # )
+
+            out_mask = torch.zeros_like(self.W_O.weight)
+
+            # out_mask[:n_classes, P : P + D] = 1
+            out_mask[:n_classes:, 3 * P + 2 * D : 3 * P + 3 * D] = 1
+
+            self.W_O.weight[:, :] = self.W_O.weight * out_mask
 
         if mlp is not None:
             print("NOT USING MLP")
