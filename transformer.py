@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from util import attention_map_vis
+from util import attention_map_vis, plot_wo
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -171,7 +171,7 @@ class DisentangledAttention(nn.Module):
         A = torch.matmul(x[:, None, :, :], A.transpose(-2, -1))
 
         V = (
-            self.W_V(x)
+            x
             .view(batch_size, -1, self.n_heads, self.d_hidden // self.n_heads)
             .transpose(1, 2)
         )
@@ -357,7 +357,7 @@ class Readout(nn.Module):
 class Transformer(nn.Module):
 
     def __init__(
-        self, n_classes, n_layers=2, n_heads=1, p_dropout=0.0, d_hidden=128, mlp=None
+        self, n_classes, n_layers=2, n_heads=1, p_dropout=0.0, d_hidden=80, mlp=None
     ):
         super(Transformer, self).__init__()
 
@@ -406,7 +406,8 @@ class Transformer(nn.Module):
 class DisentangledTransformer(nn.Module):
 
     def __init__(
-        self, n_classes, n_layers=2, n_heads=1, p_dropout=0.0, d_hidden=128, mlp=None
+        self, n_classes, n_layers=2, n_heads=1, p_dropout=0.0, d_hidden=80, mlp=None, P=17,
+        D=63
     ):
         super(DisentangledTransformer, self).__init__()
 
@@ -416,7 +417,9 @@ class DisentangledTransformer(nn.Module):
         self.n_layers = n_layers
         self.n_heads = n_heads
         self.p_dropout = p_dropout
-        self.d_hidden = d_hidden
+        self.d_hidden = P + D
+        self.P = P
+        self.D = D
 
         self.layer_norm = LayerNorm(self.d_hidden)
         for i in range(self.n_layers):

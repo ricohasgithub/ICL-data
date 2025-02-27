@@ -29,16 +29,24 @@ def attention_map_vis(
         seaborn.heatmap(attention_matrix, xticklabels=classes, yticklabels=classes)
 
     if vis_mode == 0:
-        plt.savefig(f"./runs/{path}/train/layer{layer}/attn_map_{epoch}.png")
+        plt.savefig(f"./runs/{path}/train/layer{layer}/attn_map_{epoch}.png", dpi=300, bbox_inches="tight")
     elif vis_mode == 1:
-        plt.savefig(f"./runs/{path}/icl1/layer{layer}/attn_map_{epoch}.png")
+        plt.savefig(f"./runs/{path}/icl1/layer{layer}/attn_map_{epoch}.png", dpi=300, bbox_inches="tight")
     elif vis_mode == 2:
-        plt.savefig(f"./runs/{path}/icl2/layer{layer}/attn_map_{epoch}.png")
+        plt.savefig(f"./runs/{path}/icl2/layer{layer}/attn_map_{epoch}.png", dpi=300, bbox_inches="tight")
     elif vis_mode == 3:
-        plt.savefig(f"./runs/{path}/iwl/layer{layer}/attn_map_{epoch}.png")
+        plt.savefig(f"./runs/{path}/iwl/layer{layer}/attn_map_{epoch}.png", dpi=300, bbox_inches="tight")
 
     plt.close()
 
+def plot_wo(wo, path, epoch=-1):
+    try:
+        os.makedirs(f"{path}w_o/")
+    except:
+        print(path + " already exists.")
+    seaborn.heatmap(wo)
+    plt.savefig(path + f"w_o/w_o{epoch}_weights_vis.png")
+    plt.close()
 
 def gen_attention_map_gif(path, vis_mode=-1, layer=-1):
     folder = None
@@ -79,7 +87,6 @@ def create_image_gif_folder_structure(run_name):
         os.makedirs(f"./runs/{run_name}/output/")
     except:
         print(f"{run_name} already exists.")
-
 
 def vis_attention_weights(
     layer0_weights,
