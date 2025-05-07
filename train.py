@@ -78,6 +78,10 @@ p_C = float(sys.argv[2])
 
 lamb = 1e-9
 
+circuit_num = 0
+block0_num = 0
+block1_num = 0
+
 batchsize = 128
 no_repeats = False
 
@@ -120,10 +124,10 @@ if not use_mlp:
     wandb.init(
         # Set the wandb project where this run will be logged
         project="icl-data",
-        name=f"Readout, K={K}, L={L}, N={N}, p_B={p_B}, p_C={p_C}, B={B}, eps={eps}, lamb={lamb}",
+        name=f"Readout, CN={circuit_num}, B0={block0_num}, B1={block1_num}, K={K}, L={L}, N={N}, p_B={p_B}, p_C={p_C}, B={B}, eps={eps}, lamb={lamb}",
     )
 
-    run_path = f"Readout|K={K}|L={L}|p_B={p_B}|p_C={p_C}|B={B}|eps={eps}"
+    run_path = f"Readout|CN={circuit_num}|B0={block0_num}|B1={block1_num}|K={K}|L={L}|p_B={p_B}|p_C={p_C}|B={B}|eps={eps}"
 
     mlp_readout = Readout(L)
 
@@ -131,28 +135,28 @@ if not use_mlp:
         model = Transformer(L, mlp=mlp_readout).to(device)
     else:
         # model = DisentangledTransformer(L, mlp=mlp_readout).to(device)
-        model = RestrictedDisentangledTransformer(L, mlp=mlp_readout).to(device)
+        model = RestrictedDisentangledTransformer(L, mlp=mlp_readout, circuit_num=circuit_num).to(device)
         print(model)
 else:
 
     wandb.init(
         # Set the wandb project where this run will be logged
         project="icl-data",
-        name=f"MLP, K={K}, L={L}, p_B={p_B}, p_C={p_C}, B={B}, eps={eps}, lamb={lamb}",
+        name=f"MLP, CN={circuit_num}, B0={block0_num}, B1={block1_num}, K={K}, L={L}, p_B={p_B}, p_C={p_C}, B={B}, eps={eps}, lamb={lamb}",
     )
-    run_path = f"MLP|K={K}|L={L}|p_B={p_B}|p_C={p_C}|B={B}|eps={eps}"
+    run_path = f"MLP|CN={circuit_num}|B0={block0_num}|B1={block1_num}|K={K}|L={L}|p_B={p_B}|p_C={p_C}|B={B}|eps={eps}"
 
     if not use_disentangled:
         model = Transformer(L).to(device)
     else:
         # model = DisentangledTransformer(L).to(device)
-        model = RestrictedDisentangledTransformer(L).to(device)
+        model = RestrictedDisentangledTransformer(L, circuit_num=circuit_num).to(device)
 
 
 run_path += f"|{uuid.uuid4()}"
 
 if use_disentangled:
-    run_path = "Z Unrestricted Disentangled|" + run_path
+    run_path = "Unrestricted Disentangled|" + run_path
 else:
     run_path = "Transformer|" + run_path
 
@@ -309,19 +313,22 @@ for epoch in range(epochs):
     loss.backward()
 
     if use_disentangled:
-        # model.transformer_block_0.causal_block.W_QK.weight.grad[
-        #     : model.P, : model.P
-        # ] = 0
-        model.transformer_block_0.causal_block.W_QK.weight.grad[
-            model.P :, : model.P
-        ] = 0
-        model.transformer_block_0.causal_block.W_QK.weight.grad[
-            : model.P, model.P :
-        ] = 0
-
-        model.transformer_block_0.causal_block.W_QK.weight.grad[
-            model.P :, model.P :
-        ] = 0
+        if block0_num in [1, 2, 3]:
+            model.transformer_block_0.causal_block.W_QK.weight.grad[
+                : model.P, : model.P
+            ] = 0
+        if block0_num in [0, 2, 3]:
+            model.transformer_block_0.causal_block.W_QK.weight.grad[
+                model.P :, : model.P
+            ] = 0
+        if block0_num in [0, 1, 3]:
+            model.transformer_block_0.causal_block.W_QK.weight.grad[
+                : model.P, model.P :
+            ] = 0
+        if block0_num in [0, 1, 2]:
+            model.transformer_block_0.causal_block.W_QK.weight.grad[
+                model.P :, model.P :
+            ] = 0
 
         # print(model.transformer_block_0.causal_block.W_V.weight.grad)
         if model.transformer_block_0.causal_block.W_V.weight.grad != None:
@@ -335,7 +342,7 @@ for epoch in range(epochs):
             model.transformer_block_1.causal_block.W_QK.weight.grad * mask1
         )
 
-    circuit_num = 2
+    circuit_num = circuit_num
     out_mask = torch.zeros_like(model.W_O.weight)
     # out_mask[:L, model.P : model.P + model.D] = 1
     # out_mask[:L, 3 * model.P + 2 * model.D : 3 * model.P + 3 * model.D] = 1

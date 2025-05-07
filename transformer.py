@@ -479,6 +479,7 @@ class RestrictedDisentangledTransformer(nn.Module):
         mlp=None,
         P=17,
         D=63,
+        circuit_num=2,
     ):
         super(RestrictedDisentangledTransformer, self).__init__()
 
@@ -520,7 +521,8 @@ class RestrictedDisentangledTransformer(nn.Module):
             # self.transformer_block_0.causal_block.W_QK.weight[:P, P:] = 0
             # self.transformer_block_0.causal_block.W_QK.weight[P:, P:] = 0
 
-            # self.transformer_block_0.causal_block.W_QK.weight[:, :] = 0
+            self.transformer_block_0.causal_block.W_QK.weight[:, :] = 0
+            self.transformer_block_1.causal_block.W_QK.weight[:, :] = 0
 
             self.transformer_block_0.causal_block.W_V.weight[:, :] = torch.eye(P + D)
             self.transformer_block_1.causal_block.W_V.weight[:, :] = torch.eye(
@@ -535,7 +537,7 @@ class RestrictedDisentangledTransformer(nn.Module):
             #     self.transformer_block_1.causal_block.W_QK.weight * mask1
             # )
 
-            circuit_num = 2
+            circuit_num = circuit_num
             out_mask = torch.zeros_like(self.W_O.weight)
 
             # out_mask[:n_classes, P : P + D] = 1
