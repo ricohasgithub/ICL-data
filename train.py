@@ -23,7 +23,7 @@ from util import (
     vis_attention_weights,
     svd_attention_weights,
     vis_output,
-    plot_wo
+    plot_wo,
 )
 import uuid
 
@@ -57,12 +57,12 @@ def plot_grad_flow(named_parameters):
 
 epochs = 10000
 
-K = 256
-L = 32
+K = 1280
+L = 320
 S = 10000
 N = 8
 Nmax = 9
-eps = 0.0
+eps = 0
 
 D = 63
 P = 17
@@ -72,11 +72,11 @@ alpha = 0
 P = 1.0 / (np.arange(1, K + 1) ** alpha)
 P /= np.sum(P)
 
-B = 4
+B = 2
 p_B = float(sys.argv[1])
 p_C = float(sys.argv[2])
 
-lamb = 1e-4
+lamb = 1e-9
 
 batchsize = 128
 no_repeats = False
@@ -130,8 +130,9 @@ if not use_mlp:
     if not use_disentangled:
         model = Transformer(L, mlp=mlp_readout).to(device)
     else:
-        model = DisentangledTransformer(L, mlp=mlp_readout).to(device)
-        # model = RestrictedDisentangledTransformer(L, mlp=mlp_readout).to(device)
+        # model = DisentangledTransformer(L, mlp=mlp_readout).to(device)
+        model = RestrictedDisentangledTransformer(L, mlp=mlp_readout).to(device)
+        print(model)
 else:
 
     wandb.init(
@@ -170,7 +171,7 @@ other_params = [p for name, p in model.named_parameters() if "W_O" not in name]
 
 optim = optim.SGD(
     [{"params": other_params}, {"params": out_param, "weight_decay": 0.000}],
-    lr=1e-1,
+    lr=1e-2,
     weight_decay=lamb,
 )
 mus_label, mus_class, labels_class = get_mus_label_class(K, L, D)
@@ -209,6 +210,8 @@ test_inputs_ic, test_labels_ic = generate_input_seqs(
     p_B=1,
     p_C=1,
     no_repeats=no_repeats,
+    gen_vis=True,
+    save_path=run_path,
 )
 test_inputs_ic2, test_labels_ic2 = generate_input_seqs(
     mus_label,
@@ -258,14 +261,18 @@ for epoch in range(epochs):
                 QK0.cpu().detach().numpy(),
                 QK1.cpu().detach().numpy(),
                 W_O.cpu().detach().numpy(),
-                save_dir="./disentangled_model_plots/" + run_path + "/",
+                P=model.P,
+                D=model.D,
+                # save_dir="./disentangled_model_plots/" + run_path + "/",
+                save_dir="./circuit_plots/" + run_path + "/",
                 model_name=f"model_{epoch}",
                 hyper_params={"p_B": p_B, "p_C": p_C},
             )
 
             plot_wo(
                 W_O.cpu().detach().numpy(),
-                "./disentangled_model_plots/" + run_path + "/",
+                # "./disentangled_model_plots/" + run_path + "/",
+                "./circuit_plots/" + run_path + "/",
                 epoch=epoch,
             )
 
@@ -275,7 +282,8 @@ for epoch in range(epochs):
                 .numpy()[model.P : model.P + model.D, 2 * model.P + model.D :],
                 layer=2,
                 save_file_name=f"model_{epoch}",
-                save_dir="./disentangled_model_plots/" + run_path + "/",
+                # save_dir="./disentangled_model_plots/" + run_path + "/",
+                save_dir="./circuit_plots/" + run_path + "/",
                 model_name=f"model_{epoch}",
                 hyper_params={"p_B": p_B, "p_C": p_C},
             )
@@ -300,32 +308,43 @@ for epoch in range(epochs):
     loss = criterion(model, inputs_batch, labels_batch, -1)
     loss.backward()
 
-    # if use_disentangled:
-    #     model.transformer_block_0.causal_block.W_QK.weight.grad[
-    #         model.P :, : model.P
-    #     ] = 0
-    #     model.transformer_block_0.causal_block.W_QK.weight.grad[
-    #         : model.P, model.P :
-    #     ] = 0
+    if use_disentangled:
+        # model.transformer_block_0.causal_block.W_QK.weight.grad[
+        #     : model.P, : model.P
+        # ] = 0
+        model.transformer_block_0.causal_block.W_QK.weight.grad[
+            model.P :, : model.P
+        ] = 0
+        model.transformer_block_0.causal_block.W_QK.weight.grad[
+            : model.P, model.P :
+        ] = 0
 
-    #     model.transformer_block_0.causal_block.W_QK.weight.grad[
-    #         model.P :, model.P :
-    #     ] = 0
+        model.transformer_block_0.causal_block.W_QK.weight.grad[
+            model.P :, model.P :
+        ] = 0
 
-    #     model.transformer_block_0.causal_block.W_V.weight.grad[:, :] = 0
-    #     model.transformer_block_1.causal_block.W_V.weight.grad[:, :] = 0
+        # print(model.transformer_block_0.causal_block.W_V.weight.grad)
+        if model.transformer_block_0.causal_block.W_V.weight.grad != None:
+            model.transformer_block_0.causal_block.W_V.weight.grad[:, :] = 0
+            model.transformer_block_1.causal_block.W_V.weight.grad[:, :] = 0
 
-    #     mask1 = torch.zeros_like(model.transformer_block_1.causal_block.W_QK.weight)
-    #     mask1[model.P : model.P + model.D, 2 * model.P + model.D :] = 1
+        mask1 = torch.zeros_like(model.transformer_block_1.causal_block.W_QK.weight)
+        mask1[model.P : model.P + model.D, 2 * model.P + model.D :] = 1
 
-    #     model.transformer_block_1.causal_block.W_QK.weight.grad = (
-    #         model.transformer_block_1.causal_block.W_QK.weight.grad * mask1
-    #     )
+        model.transformer_block_1.causal_block.W_QK.weight.grad = (
+            model.transformer_block_1.causal_block.W_QK.weight.grad * mask1
+        )
 
-    #     out_mask = torch.zeros_like(model.W_O.weight)
-    #     # out_mask[:L, model.P : model.P + model.D] = 1
-    #     out_mask[:L, 3 * model.P + 2 * model.D : 3 * model.P + 3 * model.D] = 1
-    #     model.W_O.weight.grad[:, :] = model.W_O.weight.grad * out_mask
+    circuit_num = 2
+    out_mask = torch.zeros_like(model.W_O.weight)
+    # out_mask[:L, model.P : model.P + model.D] = 1
+    # out_mask[:L, 3 * model.P + 2 * model.D : 3 * model.P + 3 * model.D] = 1
+    out_mask[
+        :L,
+        circuit_num * (model.P + model.D) : (circuit_num + 1) * (model.P + model.D),
+    ] = 1
+    model.W_O.weight.grad[:, :] = model.W_O.weight.grad * out_mask
+    # pass
     optim.step()
 
     print(f"Epoch: {epoch}, Loss: {loss.item()}")

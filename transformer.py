@@ -43,8 +43,10 @@ class LayerNorm(nn.Module):
 
     def __init__(self, features, eps=1e-6):
         super(LayerNorm, self).__init__()
-        self.a_2 = nn.Parameter(torch.ones(features)).to(device)
-        self.b_2 = nn.Parameter(torch.zeros(features)).to(device)
+        # self.a_2 = nn.Parameter(torch.ones(features)).to(device)
+        self.a_2 = torch.ones(features).to(device)
+        # self.b_2 = nn.Parameter(torch.zeros(features)).to(device)
+        self.b_2 = torch.zeros(features).to(device)
         self.eps = eps
 
     def forward(self, x):
@@ -54,7 +56,6 @@ class LayerNorm(nn.Module):
 
 
 class Attention(nn.Module):
-
     "Implements Standard MultiHeadAttention"
 
     def __init__(self, n_heads=8, d_hidden=64, p_dropout=0.0, scaling=1.0, bias=True):
@@ -128,7 +129,6 @@ class Attention(nn.Module):
 
 
 class DisentangledAttention(nn.Module):
-
     "Implements Standard MultiHeadAttention"
 
     def __init__(self, n_heads=8, d_hidden=64, p_dropout=0.0, scaling=1.0, bias=True):
@@ -149,7 +149,8 @@ class DisentangledAttention(nn.Module):
         self.bias = bias
 
         self.W_QK = nn.Linear(d_hidden, d_hidden, bias=False).to(self.device)
-        torch.nn.init.normal_(self.W_QK.weight, mean=0, std=1e-3)
+        # torch.nn.init.normal_(self.W_QK.weight, mean=0, std=1e-3)
+        torch.nn.init.zeros_(self.W_QK.weight)
 
         self.W_V = nn.Linear(d_hidden, d_hidden, bias=False).to(self.device)
 
@@ -170,11 +171,9 @@ class DisentangledAttention(nn.Module):
 
         A = torch.matmul(x[:, None, :, :], A.transpose(-2, -1))
 
-        V = (
-            x
-            .view(batch_size, -1, self.n_heads, self.d_hidden // self.n_heads)
-            .transpose(1, 2)
-        )
+        V = x.view(
+            batch_size, -1, self.n_heads, self.d_hidden // self.n_heads
+        ).transpose(1, 2)
 
         x, att_dist = self.attention(A, V, mask)
 
@@ -307,7 +306,7 @@ class DisentangledTransformerBlock(nn.Module):
         self.p_dropout = p_dropout
         self.scaling = scaling
         self.bias = bias
-        self.layer_norm = LayerNorm(self.d_hidden).to(self.device)
+        # self.layer_norm = LayerNorm(self.d_hidden).to(self.device)
         self.causal_block = DisentangledCausalAttention(
             self.n_heads, self.d_hidden, self.p_dropout, self.scaling, self.bias
         ).to(self.device)
@@ -316,7 +315,8 @@ class DisentangledTransformerBlock(nn.Module):
         self, x, y=None, mask=None, layer=-1, vis_mode=-1, epoch=-1, vis_path=""
     ):
         attention_output = self.causal_block(
-            self.layer_norm(x),
+            # self.layer_norm(x),
+            x,
             y,
             mask,
             layer=layer,
@@ -406,8 +406,15 @@ class Transformer(nn.Module):
 class DisentangledTransformer(nn.Module):
 
     def __init__(
-        self, n_classes, n_layers=2, n_heads=1, p_dropout=0.0, d_hidden=80, mlp=None, P=17,
-        D=63
+        self,
+        n_classes,
+        n_layers=2,
+        n_heads=1,
+        p_dropout=0.0,
+        d_hidden=80,
+        mlp=None,
+        P=17,
+        D=63,
     ):
         super(DisentangledTransformer, self).__init__()
 
@@ -421,7 +428,7 @@ class DisentangledTransformer(nn.Module):
         self.P = P
         self.D = D
 
-        self.layer_norm = LayerNorm(self.d_hidden)
+        # self.layer_norm = LayerNorm(self.d_hidden)
         for i in range(self.n_layers):
             setattr(
                 self,
@@ -455,7 +462,7 @@ class DisentangledTransformer(nn.Module):
                 x = getattr(self, f"transformer_block_{i}")(x, layer=-1)
 
         x = self.W_O(x)
-        x = self.layer_norm(x)
+        # x = self.layer_norm(x)
         x = self.mlp(x)
         return x
 
@@ -486,7 +493,7 @@ class RestrictedDisentangledTransformer(nn.Module):
         self.D = D
 
         # self.layer_norm = LayerNorm(self.d_hidden)
-        self.layer_norm = LayerNorm(self.n_classes)
+        # self.layer_norm = LayerNorm(self.n_classes)
 
         for i in range(self.n_layers):
             setattr(
@@ -508,29 +515,34 @@ class RestrictedDisentangledTransformer(nn.Module):
         ).to(self.device)
 
         with torch.no_grad():
+            # self.transformer_block_0.causal_block.W_QK.weight[:P, :P] = 0
             # self.transformer_block_0.causal_block.W_QK.weight[P:, :P] = 0
             # self.transformer_block_0.causal_block.W_QK.weight[:P, P:] = 0
             # self.transformer_block_0.causal_block.W_QK.weight[P:, P:] = 0
 
-            self.transformer_block_0.causal_block.W_QK.weight[:, :] = 0
+            # self.transformer_block_0.causal_block.W_QK.weight[:, :] = 0
 
             self.transformer_block_0.causal_block.W_V.weight[:, :] = torch.eye(P + D)
             self.transformer_block_1.causal_block.W_V.weight[:, :] = torch.eye(
                 (P + D) * 2
             )
 
-            mask1 = torch.zeros_like(self.transformer_block_1.causal_block.W_QK.weight)
-            mask1[P : P + D, 2 * P + D :] = torch.eye(D)
+            # mask1 = torch.zeros_like(self.transformer_block_1.causal_block.W_QK.weight)
+            # mask1[P : P + D, 2 * P + D :] = torch.eye(D)
 
-            self.transformer_block_1.causal_block.W_QK.weight[:, :] = mask1 * 0.001
+            # self.transformer_block_1.causal_block.W_QK.weight[:, :] = mask1 * 0.001
             # self.transformer_block_1.causal_block.W_QK.weight[:, :] = (
             #     self.transformer_block_1.causal_block.W_QK.weight * mask1
             # )
 
+            circuit_num = 2
             out_mask = torch.zeros_like(self.W_O.weight)
 
             # out_mask[:n_classes, P : P + D] = 1
-            out_mask[:n_classes:, 3 * P + 2 * D : 3 * P + 3 * D] = 1
+
+            out_mask[
+                :n_classes:, circuit_num * (P + D) : (circuit_num + 1) * (P + D)
+            ] = 1
 
             self.W_O.weight[:, :] = self.W_O.weight * out_mask
 
@@ -552,6 +564,6 @@ class RestrictedDisentangledTransformer(nn.Module):
                 x = getattr(self, f"transformer_block_{i}")(x, layer=-1)
 
         x = self.W_O(x)
-        x = self.layer_norm(x)
+        # x = self.layer_norm(x)
         x = self.mlp(x)
         return x

@@ -12,8 +12,8 @@ import numpy as np
 
 use_mlp = False
 use_disentangled = True
-K = 1280
-L = 320
+K = 512
+L = 32
 p_B = 0.375
 p_C = 0.375
 B = 1
@@ -34,7 +34,7 @@ else:
 #     f"{model_type}|{last_layer}|K={K}|L={L}|p_B={p_B}|p_C={p_C}|B={B}|eps={eps}|{uuid}"
 # )
 
-run_name = "Z Unrestricted Disentangled|Readout|K=1280|L=320|p_B=1.0|p_C=1.0|B=4|eps=0.0|b78b65af-1831-472a-994e-9a6d6e880e23"
+run_name = "Z Unrestricted Disentangled|Readout|K=256|L=32|p_B=0.5|p_C=0.5|B=4|eps=0.0|22002d76-762a-4fb3-9968-f7b39098fbee"
 
 with open(f"./runs/{run_name}/mus_label.npy", "rb") as f:
     mus_label = np.load(f)
@@ -53,7 +53,7 @@ model_files = os.listdir(path_to_run)
 model_files.sort(key=lambda file: int(file.split("_")[-1]), reverse=True)
 
 # latest_model = model_files[0]
-latest_model = "model_1300"
+latest_model = "model_900"
 
 print("Loading " + path_to_run + latest_model + "...")
 
@@ -90,61 +90,68 @@ else:
 
 W_O = model_params["W_O.weight"]
 
-token_to_token_submatrix = QK1[model.P : model.P + model.D, model.P : model.P + model.D]
-combined_token_to_token_submatrix = QK1[
-    model.P : model.P + model.D, 2 * model.P + model.D :
-]
+# token_to_token_submatrix = QK1[model.P : model.P + model.D, model.P : model.P + model.D]
+# combined_token_to_token_submatrix = QK1[
+#     model.P : model.P + model.D, 2 * model.P + model.D :
+# ]
 
-token_to_token = np.matmul(
-    mus, np.matmul(token_to_token_submatrix, mus_class.transpose())
+# new_token_to_old_query_submatrix = QK1[
+#     2 * model.P + model.D :, model.P : model.P + model.D
+# ]
+# new_token_to_old_query_submatrix = QK1[
+#     model.P : model.P + model.D, 2 * model.P + model.D :
+# ]
+new_token_to_old_query_submatrix = QK1[2 * model.P + model.D :, 2 * model.P + model.D :]
+print(new_token_to_old_query_submatrix.shape)
+print(mus.shape)
+
+new_token_to_old_query = np.matmul(
+    mus, np.matmul(new_token_to_old_query_submatrix, mus_class.transpose())
 )
-combined_token_to_token = np.matmul(
-    combined_mus, np.matmul(combined_token_to_token_submatrix, mus_class.transpose())
-)
-
-combined_token_to_token = combined_token_to_token.transpose(0, 1)
-
-
-U, S, Vh = np.linalg.svd(combined_token_to_token_submatrix, full_matrices=False)
-
-U_label = np.max(np.matmul(mus_label, U), axis=0)
-Vh_label = np.max(np.matmul(Vh, mus_label.transpose()), axis=1)
-
-iwl_out = W_O[:L, model.P : model.P + model.D]
-
-circuit_num = 3
-icl_out = W_O[
-    :L,
-    circuit_num * (model.P + model.D)
-    + model.P : (circuit_num + 1) * (model.P + model.D),
-]
-
-
-icl_res = np.matmul(icl_out, mus_label.transpose())
-
-class_centroids = []
-
-for label in range(L):
-    class_centers = mus_class[labels_class == label]
-
-    class_centroid = np.mean(class_centers, axis=0).reshape(-1, 1)
-
-    class_centroids.append(class_centroid)
-class_centroids = np.stack(class_centroids, axis=0)[:, :, 0]
-
-iwl_res = np.matmul(iwl_out, class_centroids.transpose())
 
 plt.figure()
-
-plt.subplot(1, 2, 1)
-plt.title("IWL Plot: Z_1 * Class Centroids")
-
-
-seaborn.heatmap(iwl_res)
-
-plt.subplot(1, 2, 2)
-plt.title("ICL Plot: Z_2 * Label Embeddings")
-
-seaborn.heatmap(icl_res)
-
+seaborn.heatmap(new_token_to_old_query_submatrix)
 plt.show()
+# combined_token_to_token = np.matmul(
+#     combined_mus, np.matmul(combined_token_to_token_submatrix, mus_class.transpose())
+# )
+
+# combined_token_to_token = combined_token_to_token.transpose(0, 1)
+
+
+# U, S, Vh = np.linalg.svd(combined_token_to_token_submatrix, full_matrices=False)
+
+# U_label = np.max(np.matmul(mus_label, U), axis=0)
+# Vh_label = np.max(np.matmul(Vh, mus_label.transpose()), axis=1)
+
+# iwl_out = W_O[:L, model.P : model.P + model.D]
+# icl_out = W_O[:L, 3 * model.P + 2 * model.D : 3 * model.P + 3 * model.D]
+
+# icl_res = np.matmul(icl_out, mus_label.transpose())
+
+# class_centroids = []
+
+# for label in range(L):
+#     class_centers = mus_class[labels_class == label]
+
+#     class_centroid = np.mean(class_centers, axis=0).reshape(-1, 1)
+
+#     class_centroids.append(class_centroid)
+# class_centroids = np.stack(class_centroids, axis=0)[:, :, 0]
+
+# iwl_res = np.matmul(iwl_out, class_centroids.transpose())
+
+# plt.figure()
+
+# plt.subplot(1, 2, 1)
+# plt.title("IWL Plot: Z_1 * Class Centroids")
+
+
+# seaborn.heatmap(iwl_res)
+
+# plt.subplot(1, 2, 2)
+# plt.title("ICL Plot: Z_2 * Label Embeddings")
+
+# seaborn.heatmap(icl_res)
+
+# plt.show()

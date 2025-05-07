@@ -26,7 +26,8 @@ def get_mus_label_class(K, L, D):
 
     mus_label = np.random.normal(size=(L, D)) / np.sqrt(D)
     mus_class = np.random.normal(size=(K, D)) / np.sqrt(D)
-    if K < L or K % L != 0:
+
+    if (K < L) or ((K % L) != 0):
         print("K > L and K%L == 0 is required")
         return 0
     labels_class = np.tile(np.arange(L), int(K / L))
@@ -75,14 +76,19 @@ def generate_input_seqs(
     flip_labels=False,
     output_target_labels=False,
     no_repeats=False,
+    gen_vis=False,
+    save_path="",
 ):
+    import numpy as np
+    import torch
+
     e_fac = 1 / np.sqrt(1 + eps**2)
 
     L = mus_label.shape[0]
     K = mus_class.shape[0]
     D = mus_label.shape[1]
 
-    K_c = 128
+    K_c = K
     mus_class_new = np.random.normal(size=(K_c, D)) / np.sqrt(D)
 
     if K_c < L or K_c % L != 0:
@@ -125,7 +131,6 @@ def generate_input_seqs(
             )
             pos_choices = np.random.choice(np.arange(int(K_c / L)), size=(int(N / B)))
             choices_c[s] = pos_choices * L + label_choices
-            # print(choices_c[s], labels_class_new[choices_c[s]],label_choices, pos_choices)
     else:
         choices_c = np.random.choice(np.arange(K_c), size=(S, int(N / B)))
     choices_c = np.tile(choices_c, B)
@@ -139,20 +144,17 @@ def generate_input_seqs(
 
     filt_B = np.random.uniform(size=S) > p_B
     filt_C = np.random.uniform(size=S) > p_C
-    
+
     # b, c
     # 1, 1 => not ICL, not bursty     => 1  (1 means to set to IWL)
     # 0, 1 => not bursty, ICL         => 0
     # 1, 0 => bursty, not ICL (****)  => 1
-    # 0, 0 => both ICL, busrty        => 0
+    # 0, 0 => both ICL, bursty        => 0
 
     filt_B = filt_B | filt_C
 
     choices[filt_B] = np.random.choice(K, size=(np.sum(filt_B), N), p=P)
     targets[filt_B] = np.random.choice(K, size=(np.sum(filt_B),), p=P)
-
-    # print(np.arange(S)[~filt_C])
-    # print(np.arange(S)[~filt_B])
 
     inputs[filt_C, :-1:2, 2 * Nmax + 1 :] = (
         e_fac
@@ -170,10 +172,7 @@ def generate_input_seqs(
         ]
 
     inputs[filt_C, -1, 2 * Nmax + 1 :] = (
-        (
-            e_fac
-            * (mus_class[targets] + eps * np.random.normal(size=(S, D)) / np.sqrt(D))
-        )
+        e_fac * (mus_class[targets] + eps * np.random.normal(size=(S, D)) / np.sqrt(D))
     )[filt_C]
 
     inputs[~filt_C, :-1:2, 2 * Nmax + 1 :] = (
@@ -191,10 +190,9 @@ def generate_input_seqs(
         * (mus_class_new[targets_c] + eps * np.random.normal(size=(S, D)) / np.sqrt(D))
     )[~filt_C]
 
-    shifts = np.zeros(shape=(S)).astype(
-        int
-    )  # np.random.choice((2 * Nmax + 1) - (2 * N + 1) + 1, size=(S))
+    inputs = inputs * np.sqrt(D)
 
+    shifts = np.zeros(shape=(S)).astype(int)
     labels = np.zeros((S, L), dtype=bool)
     target_classes = np.zeros(S, dtype=int)
 
@@ -207,6 +205,82 @@ def generate_input_seqs(
             target_classes[s] = -1
 
         inputs[s, :, shifts[s] : shifts[s] + 2 * N + 1] = np.identity(2 * N + 1)
+
+    # If visualization is requested, plot the first sequence
+    if gen_vis:
+        import matplotlib.pyplot as plt
+
+        # For sequence 0, determine which branch (filt_C True or False) it comes from.
+        if filt_C[0]:
+            context_ids = choices[0]  # array of length N
+            target_id = targets[0]
+        else:
+            context_ids = choices_c[0]
+            target_id = targets_c[0]
+
+        # Build a list of token entries.
+        # Each pair from the context will be represented as two tokens: one "class" token (even index)
+        # and one "label" token (odd index). The final token is the target.
+        tokens = []
+        for i in range(N):
+            pair_id = context_ids[i]
+            tokens.append({"pos": 2 * i, "type": "class", "pair_id": pair_id})
+            tokens.append({"pos": 2 * i + 1, "type": "label", "pair_id": pair_id})
+        tokens.append({"pos": 2 * N, "type": "target", "pair_id": target_id})
+
+        # Map unique pair IDs to colors.
+        unique_ids = sorted(set(token["pair_id"] for token in tokens))
+        cmap = plt.cm.get_cmap("tab10", len(unique_ids))
+        color_map = {uid: cmap(i) for i, uid in enumerate(unique_ids)}
+
+        # Create the figure.
+        fig, ax = plt.subplots(figsize=(max(8, 0.8 * len(tokens)), 2))
+        for token in tokens:
+            x = token["pos"]
+            # Draw a rectangle for each token.
+            rect = plt.Rectangle(
+                (x, 0.2), 0.8, 0.6, color=color_map[token["pair_id"]], ec="black"
+            )
+            ax.add_patch(rect)
+            # Annotate with token type and its pair id.
+            ax.text(
+                x + 0.4,
+                0.5,
+                f"{token['type']}\nID {token['pair_id']}",
+                ha="center",
+                va="center",
+                fontsize=9,
+            )
+        ax.set_xlim(-0.2, tokens[-1]["pos"] + 1)
+        ax.set_ylim(0, 1)
+        ax.axis("off")
+        # Create a legend mapping colors to class IDs.
+        legend_handles = [
+            plt.Line2D(
+                [0],
+                [0],
+                marker="s",
+                color="w",
+                label=f"Class {uid}",
+                markerfacecolor=color_map[uid],
+                markersize=10,
+            )
+            for uid in unique_ids
+        ]
+        ax.legend(
+            handles=legend_handles,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.1),
+            ncol=len(unique_ids),
+        )
+        plt.title("Visualization of First Generated Sequence")
+        plt.tight_layout()
+
+        plt.savefig(
+            f"./runs/{save_path}/icl1/seq_vis.png",
+            dpi=300,
+            bbox_inches="tight",
+        )
 
     if output_target_labels:
         return (
