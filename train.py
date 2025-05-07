@@ -336,7 +336,19 @@ for epoch in range(epochs):
             model.transformer_block_1.causal_block.W_V.weight.grad[:, :] = 0
 
         mask1 = torch.zeros_like(model.transformer_block_1.causal_block.W_QK.weight)
-        mask1[model.P : model.P + model.D, 2 * model.P + model.D :] = 1
+        
+        if block1_num == 0:
+            # C^2_{D, D}
+            mask1[model.P : model.P + model.D, 2 * model.P + model.D :] = 1
+        if block1_num == 1:
+            # F^2_{P, P}
+            mask1[model.P + model.D: 2 * model.P + model.D, model.P + model.D: 2 * model.P + model.D] = 1
+        if block1_num == 2:
+            # E^2_{P, P}
+            mask1[model.P + model.D: 2 * model.P + model.D, 0: model.P] = 1
+        if block1_num == 3:
+            # F^2_{D, D}
+            mask1[2 * model.P + model.D: , 2 * model.P + model.D:] = 1
 
         model.transformer_block_1.causal_block.W_QK.weight.grad = (
             model.transformer_block_1.causal_block.W_QK.weight.grad * mask1
