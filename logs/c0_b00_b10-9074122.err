@@ -1,0 +1,43 @@
+/usr/lib/python3/dist-packages/requests/__init__.py:87: RequestsDependencyWarning: urllib3 (2.2.1) or chardet (3.0.4) doesn't match a supported version!
+  warnings.warn("urllib3 ({}) or chardet ({}) doesn't match a supported "
+/usr/lib/python3/dist-packages/requests/__init__.py:87: RequestsDependencyWarning: urllib3 (2.2.1) or chardet (3.0.4) doesn't match a supported version!
+  warnings.warn("urllib3 ({}) or chardet ({}) doesn't match a supported "
+wandb: Currently logged in as: ricozhu (icl-learning). Use `wandb login --relogin` to force relogin
+wandb: wandb version 0.19.10 is available!  To upgrade, please run:
+wandb:  $ pip install wandb --upgrade
+wandb: Tracking run with wandb version 0.15.4
+wandb: Run data is saved locally in /usr/project/xtmp/yz705/ICL-data/wandb/run-20250507_153823-h0a7flvn
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run Readout, CN=0, B0=0, B1=0, K=1280, L=320, N=8, p_B=0.75, p_C=0.75, B=2, eps=0, lamb=1e-09
+wandb: ⭐️ View project at https://wandb.ai/icl-learning/icl-data
+wandb: 🚀 View run at https://wandb.ai/icl-learning/icl-data/runs/h0a7flvn
+/home/users/yz705/.local/lib/python3.10/site-packages/transformers/utils/generic.py:441: UserWarning: torch.utils._pytree._register_pytree_node is deprecated. Please use torch.utils._pytree.register_pytree_node instead.
+  _torch_pytree._register_pytree_node(
+wandb: 429 encountered (Filestream rate limit exceeded, retrying in 2.324022512116143 seconds), retrying request
+wandb: 429 encountered (Filestream rate limit exceeded, retrying in 2.450922164970589 seconds), retrying request
+wandb: 429 encountered (Filestream rate limit exceeded, retrying in 4.97320498729416 seconds), retrying request
+wandb: 429 encountered (Filestream rate limit exceeded, retrying in 2.218322644297712 seconds), retrying request
+wandb: 429 encountered (Filestream rate limit exceeded, retrying in 2.4878562787768477 seconds), retrying request
+wandb: Waiting for W&B process to finish... (success).
+wandb: - 0.005 MB of 0.005 MB uploaded (0.000 MB deduped)wandb: \ 0.005 MB of 6.364 MB uploaded (0.000 MB deduped)wandb: | 0.201 MB of 6.364 MB uploaded (0.000 MB deduped)wandb: 
+wandb: Run history:
+wandb:      epoch ▁▁▁▂▂▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▇▇▇▇▇▇███
+wandb: eval_epoch ▁▁▁▁▂▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▇▇▇▇▇▇███
+wandb:    ic1_acc ▃▃▄▆▇██▅▅▂▅▁▁▄▅▄▃▅▅▅▄▄▄▄▄▄▄▃▃▃▃▃▃▃▃▃▃▃▃▄
+wandb:    ic2_acc █▆▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:     iw_acc ▁▁▃▅▆▆▇▇▇▇▇▇▇███████████████████████████
+wandb:   test_acc ▁▁▃▄▆▆▇▇▇▇▇▇▇███████████████████████████
+wandb: train_loss ██▇▆▆▆▆▅▅▆▅▅▆▅▅▅▆▃▅▅▅▂▁▃▅▄▃▂▅▄▅▃▂▁▅▇▁▅▅▅
+wandb: 
+wandb: Run summary:
+wandb:      epoch 99999
+wandb: eval_epoch 99990
+wandb:    ic1_acc 0.0033
+wandb:    ic2_acc 0.0
+wandb:     iw_acc 0.9212
+wandb:   test_acc 0.2376
+wandb: train_loss 5.21556
+wandb: 
+wandb: 🚀 View run Readout, CN=0, B0=0, B1=0, K=1280, L=320, N=8, p_B=0.75, p_C=0.75, B=2, eps=0, lamb=1e-09 at: https://wandb.ai/icl-learning/icl-data/runs/h0a7flvn
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20250507_153823-h0a7flvn/logs

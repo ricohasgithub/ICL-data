@@ -1,0 +1,42 @@
+/usr/lib/python3/dist-packages/requests/__init__.py:87: RequestsDependencyWarning: urllib3 (2.2.1) or chardet (3.0.4) doesn't match a supported version!
+  warnings.warn("urllib3 ({}) or chardet ({}) doesn't match a supported "
+Traceback (most recent call last):
+  File "/usr/project/xtmp/yz705/ICL-data/./train.py", line 7, in <module>
+    import torch
+  File "/home/users/yz705/.local/lib/python3.10/site-packages/torch/__init__.py", line 1919, in <module>
+    from . import _meta_registrations
+  File "/home/users/yz705/.local/lib/python3.10/site-packages/torch/_meta_registrations.py", line 9, in <module>
+    from torch._decomp import (
+  File "/home/users/yz705/.local/lib/python3.10/site-packages/torch/_decomp/__init__.py", line 244, in <module>
+    import torch._decomp.decompositions
+  File "/home/users/yz705/.local/lib/python3.10/site-packages/torch/_decomp/decompositions.py", line 11, in <module>
+    import torch._prims as prims
+  File "/home/users/yz705/.local/lib/python3.10/site-packages/torch/_prims/__init__.py", line 3031, in <module>
+    register_debug_prims()
+  File "/home/users/yz705/.local/lib/python3.10/site-packages/torch/_prims/debug_prims.py", line 41, in register_debug_prims
+    def load_tensor_factory(name, size, stride, dtype, device):
+  File "/home/users/yz705/.local/lib/python3.10/site-packages/torch/_custom_op/impl.py", line 333, in inner
+    self._register_impl("factory", f)
+  File "/home/users/yz705/.local/lib/python3.10/site-packages/torch/_custom_op/impl.py", line 223, in _register_impl
+    frame = inspect.getframeinfo(sys._getframe(stacklevel))
+  File "/usr/lib/python3.10/inspect.py", line 1624, in getframeinfo
+    lines, lnum = findsource(frame)
+  File "/usr/lib/python3.10/inspect.py", line 952, in findsource
+    module = getmodule(object, file)
+  File "/usr/lib/python3.10/inspect.py", line 869, in getmodule
+    if ismodule(module) and hasattr(module, '__file__'):
+  File "/usr/lib/python3.10/importlib/util.py", line 247, in __getattribute__
+    self.__spec__.loader.exec_module(self)
+  File "/home/users/yz705/.local/lib/python3.10/site-packages/httpx/__init__.py", line 2, in <module>
+    from ._api import delete, get, head, options, patch, post, put, request, stream
+  File "/home/users/yz705/.local/lib/python3.10/site-packages/httpx/_api.py", line 3, in <module>
+    from ._client import Client, StreamContextManager
+  File "/home/users/yz705/.local/lib/python3.10/site-packages/httpx/_client.py", line 6, in <module>
+    import httpcore
+  File "/home/users/yz705/.local/lib/python3.10/site-packages/httpcore/__init__.py", line 2, in <module>
+    from ._async.connection_pool import AsyncConnectionPool
+  File "/home/users/yz705/.local/lib/python3.10/site-packages/httpcore/_async/connection_pool.py", line 4, in <module>
+    from .._backends.auto import AsyncLock, AsyncSemaphore, AutoBackend
+  File "/home/users/yz705/.local/lib/python3.10/site-packages/httpcore/_backends/auto.py", line 4, in <module>
+    import sniffio
+ModuleNotFoundError: No module named 'sniffio'

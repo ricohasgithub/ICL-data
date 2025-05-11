@@ -55,7 +55,7 @@ def plot_grad_flow(named_parameters):
     plt.grid(True)
 
 
-epochs = 10000
+epochs = 100000
 
 K = 1280
 L = 320
@@ -78,9 +78,9 @@ p_C = float(sys.argv[2])
 
 lamb = 1e-9
 
-circuit_num = 0
-block0_num = 0
-block1_num = 0
+circuit_num = int(sys.argv[3])
+block0_num = int(sys.argv[4])
+block1_num = int(sys.argv[5])
 
 batchsize = 128
 no_repeats = False
@@ -313,18 +313,18 @@ for epoch in range(epochs):
     loss.backward()
 
     if use_disentangled:
-        if block0_num in [1, 2, 3]:
-            model.transformer_block_0.causal_block.W_QK.weight.grad[
-                : model.P, : model.P
-            ] = 0
-        if block0_num in [0, 2, 3]:
-            model.transformer_block_0.causal_block.W_QK.weight.grad[
-                model.P :, : model.P
-            ] = 0
-        if block0_num in [0, 1, 3]:
-            model.transformer_block_0.causal_block.W_QK.weight.grad[
-                : model.P, model.P :
-            ] = 0
+        # if block0_num in [1, 2, 3]:
+        #     model.transformer_block_0.causal_block.W_QK.weight.grad[
+        #         : model.P, : model.P
+        #     ] = 0
+        # if block0_num in [0, 2, 3]:
+        #     model.transformer_block_0.causal_block.W_QK.weight.grad[
+        #         model.P :, : model.P
+        #     ] = 0
+        # if block0_num in [0, 1, 3]:
+        #     model.transformer_block_0.causal_block.W_QK.weight.grad[
+        #         : model.P, model.P :
+        #     ] = 0
         if block0_num in [0, 1, 2]:
             model.transformer_block_0.causal_block.W_QK.weight.grad[
                 model.P :, model.P :
@@ -350,9 +350,10 @@ for epoch in range(epochs):
             # F^2_{D, D}
             mask1[2 * model.P + model.D: , 2 * model.P + model.D:] = 1
 
-        model.transformer_block_1.causal_block.W_QK.weight.grad = (
-            model.transformer_block_1.causal_block.W_QK.weight.grad * mask1
-        )
+        if block1_num in [0, 1, 2, 3]:
+            model.transformer_block_1.causal_block.W_QK.weight.grad = (
+                model.transformer_block_1.causal_block.W_QK.weight.grad * mask1
+            )
 
     circuit_num = circuit_num
     out_mask = torch.zeros_like(model.W_O.weight)

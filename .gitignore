@@ -16,3 +16,4 @@ iw_attention_vis/*.gif
 train_attention_vis/*.gif
 runs/*
 disentangled_model_plots/*
+circuit_plots/
