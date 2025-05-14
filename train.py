@@ -55,7 +55,7 @@ def plot_grad_flow(named_parameters):
     plt.grid(True)
 
 
-epochs = 100000
+epochs = 150000
 
 K = 1280
 L = 320
@@ -349,8 +349,12 @@ for epoch in range(epochs):
         if block1_num == 3:
             # F^2_{D, D}
             mask1[2 * model.P + model.D: , 2 * model.P + model.D:] = 1
+        if block1_num == 4:
+            mask1[0:model.P, 0:model.P] = 1
+            mask1[model.P+model.D: 2*model.P+model.D, 0:model.P] = 1
+            mask1[model.P+model.D : 2*model.P + model.D, model.P+model.D : 2*model.P + model.D] = 1
 
-        if block1_num in [0, 1, 2, 3]:
+        if block1_num in [0, 1, 2, 3, 4]:
             model.transformer_block_1.causal_block.W_QK.weight.grad = (
                 model.transformer_block_1.causal_block.W_QK.weight.grad * mask1
             )
