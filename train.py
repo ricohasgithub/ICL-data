@@ -313,18 +313,18 @@ for epoch in range(epochs):
     loss.backward()
 
     if use_disentangled:
-        # if block0_num in [1, 2, 3]:
-        #     model.transformer_block_0.causal_block.W_QK.weight.grad[
-        #         : model.P, : model.P
-        #     ] = 0
-        # if block0_num in [0, 2, 3]:
-        #     model.transformer_block_0.causal_block.W_QK.weight.grad[
-        #         model.P :, : model.P
-        #     ] = 0
-        # if block0_num in [0, 1, 3]:
-        #     model.transformer_block_0.causal_block.W_QK.weight.grad[
-        #         : model.P, model.P :
-        #     ] = 0
+        if block0_num in [1, 2, 3]:
+            model.transformer_block_0.causal_block.W_QK.weight.grad[
+                : model.P, : model.P
+            ] = 0
+        if block0_num in [0, 2, 3]:
+            model.transformer_block_0.causal_block.W_QK.weight.grad[
+                model.P :, : model.P
+            ] = 0
+        if block0_num in [0, 1, 3]:
+            model.transformer_block_0.causal_block.W_QK.weight.grad[
+                : model.P, model.P :
+            ] = 0
         if block0_num in [0, 1, 2]:
             model.transformer_block_0.causal_block.W_QK.weight.grad[
                 model.P :, model.P :
