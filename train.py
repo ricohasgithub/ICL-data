@@ -57,22 +57,22 @@ def plot_grad_flow(named_parameters):
 
 epochs = 150000
 
-K = 1280
-L = 320
+K = 128
+L = 32
 S = 10000
 N = 8
 Nmax = 9
 eps = 0
 
 D = 63
-P = 17
+P = 2*N+1
 
 alpha = 0
 
 P = 1.0 / (np.arange(1, K + 1) ** alpha)
 P /= np.sum(P)
 
-B = 2
+B = 4
 p_B = float(sys.argv[1])
 p_C = float(sys.argv[2])
 
@@ -135,7 +135,7 @@ if not use_mlp:
         model = Transformer(L, mlp=mlp_readout).to(device)
     else:
         # model = DisentangledTransformer(L, mlp=mlp_readout).to(device)
-        model = RestrictedDisentangledTransformer(L, mlp=mlp_readout, circuit_num=circuit_num).to(device)
+        model = RestrictedDisentangledTransformer(L, P=2*N+1, mlp=mlp_readout, circuit_num=circuit_num).to(device)
         print(model)
 else:
 
@@ -249,48 +249,52 @@ test_inputs_iw, test_labels_iw = generate_input_seqs(
 
 print("Running experiment " + run_path)
 
+stage1 = True
+from collections import deque
+ic_accs = deque(maxlen=500)
+
 for epoch in range(epochs):
 
     if epoch % 50 == 0:
         torch.save(model.state_dict(), model_save_path + f"model_{epoch}")
         model_params = model.state_dict()
 
-        if use_disentangled:
-            QK0 = model_params["transformer_block_0.causal_block.W_QK.weight"]
-            QK1 = model_params["transformer_block_1.causal_block.W_QK.weight"]
+        # if use_disentangled:
+        #     QK0 = model_params["transformer_block_0.causal_block.W_QK.weight"]
+        #     QK1 = model_params["transformer_block_1.causal_block.W_QK.weight"]
 
-            W_O = model_params["W_O.weight"]
+        #     W_O = model_params["W_O.weight"]
 
-            vis_attention_weights(
-                QK0.cpu().detach().numpy(),
-                QK1.cpu().detach().numpy(),
-                W_O.cpu().detach().numpy(),
-                P=model.P,
-                D=model.D,
-                # save_dir="./disentangled_model_plots/" + run_path + "/",
-                save_dir="./circuit_plots/" + run_path + "/",
-                model_name=f"model_{epoch}",
-                hyper_params={"p_B": p_B, "p_C": p_C},
-            )
+        #     vis_attention_weights(
+        #         QK0.cpu().detach().numpy(),
+        #         QK1.cpu().detach().numpy(),
+        #         W_O.cpu().detach().numpy(),
+        #         P=model.P,
+        #         D=model.D,
+        #         # save_dir="./disentangled_model_plots/" + run_path + "/",
+        #         save_dir="./circuit_plots/" + run_path + "/",
+        #         model_name=f"model_{epoch}",
+        #         hyper_params={"p_B": p_B, "p_C": p_C},
+        #     )
 
-            plot_wo(
-                W_O.cpu().detach().numpy(),
-                # "./disentangled_model_plots/" + run_path + "/",
-                "./circuit_plots/" + run_path + "/",
-                epoch=epoch,
-            )
+        #     plot_wo(
+        #         W_O.cpu().detach().numpy(),
+        #         # "./disentangled_model_plots/" + run_path + "/",
+        #         "./circuit_plots/" + run_path + "/",
+        #         epoch=epoch,
+        #     )
 
-            svd_attention_weights(
-                QK1.cpu()
-                .detach()
-                .numpy()[model.P : model.P + model.D, 2 * model.P + model.D :],
-                layer=2,
-                save_file_name=f"model_{epoch}",
-                # save_dir="./disentangled_model_plots/" + run_path + "/",
-                save_dir="./circuit_plots/" + run_path + "/",
-                model_name=f"model_{epoch}",
-                hyper_params={"p_B": p_B, "p_C": p_C},
-            )
+        #     svd_attention_weights(
+        #         QK1.cpu()
+        #         .detach()
+        #         .numpy()[model.P : model.P + model.D, 2 * model.P + model.D :],
+        #         layer=2,
+        #         save_file_name=f"model_{epoch}",
+        #         # save_dir="./disentangled_model_plots/" + run_path + "/",
+        #         save_dir="./circuit_plots/" + run_path + "/",
+        #         model_name=f"model_{epoch}",
+        #         hyper_params={"p_B": p_B, "p_C": p_C},
+        #     )
 
     optim.zero_grad()
     inputs_batch, labels_batch, target_classes = generate_input_seqs(
@@ -359,6 +363,16 @@ for epoch in range(epochs):
                 model.transformer_block_1.causal_block.W_QK.weight.grad * mask1
             )
 
+
+        if stage1:
+            # Stage 1: only train W_O matrix
+            if model.transformer_block_0.causal_block.W_V.weight.grad != None:
+                model.transformer_block_0.causal_block.W_V.weight.grad[:, :] = 0
+                model.transformer_block_1.causal_block.W_V.weight.grad[:, :] = 0
+            if model.transformer_block_0.causal_block.W_QK.weight.grad != None:
+                model.transformer_block_0.causal_block.W_QK.weight.grad[:, :] = 0
+                model.transformer_block_1.causal_block.W_QK.weight.grad[:, :] = 0
+
     circuit_num = circuit_num
     out_mask = torch.zeros_like(model.W_O.weight)
     # out_mask[:L, model.P : model.P + model.D] = 1
@@ -415,6 +429,26 @@ for epoch in range(epochs):
                 "iw_acc": acc_iw,
             }
         )
+
+        if epoch > 6000:
+            stage1 = False
+
+        # if stage1:
+            
+        #     ic_accs.append(acc_ic)
+        #     if len(ic_accs) == ic_accs.maxlen:
+        #         # compute absolute differences between adjacent entries
+        #         # diffs = [abs(ic_accs[j] - ic_accs[j-1]) 
+        #         #          for j in range(1, len(ic_accs))]
+        #         # avg_rate = sum(diffs) / len(diffs)
+
+        #         avg_val = sum(list(ic_accs)) / len(ic_accs)
+        #         print(avg_val)
+                
+        #         # 4) test against tolerance
+        #         if avg_val > (float(B)/N):
+        #             print(f"Converged at epoch {epoch}: avg_val={avg_val:.6e}")
+        #             stage1 = False
 
 torch.save(model.state_dict(), model_save_path + f"model_{epoch}")
 
