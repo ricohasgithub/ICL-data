@@ -57,8 +57,8 @@ def plot_grad_flow(named_parameters):
 
 epochs = 150000
 
-K = 16
-L = 16
+K = 128
+L = 32
 S = 10000
 N = 8
 Nmax = 9
@@ -72,7 +72,7 @@ alpha = 0
 P = 1.0 / (np.arange(1, K + 1) ** alpha)
 P /= np.sum(P)
 
-B = 2
+B = 4
 p_B = float(sys.argv[1])
 p_C = float(sys.argv[2])
 
@@ -251,6 +251,11 @@ test_inputs_iw, test_labels_iw = generate_input_seqs(
 
 print("Running experiment " + run_path)
 
+stage1 = True
+from collections import deque
+
+ic_accs = deque(maxlen=500)
+
 for epoch in range(epochs):
 
     if epoch % 50 == 0:
@@ -367,19 +372,24 @@ for epoch in range(epochs):
                 model.transformer_block_1.causal_block.W_QK.weight.grad * mask1
             )
 
-        circuit_num = circuit_num
+        if stage1:
+            # Stage 1: only train W_O matrix
+            if model.transformer_block_0.causal_block.W_V.weight.grad != None:
+                model.transformer_block_0.causal_block.W_V.weight.grad[:, :] = 0
+                model.transformer_block_1.causal_block.W_V.weight.grad[:, :] = 0
+            if model.transformer_block_0.causal_block.W_QK.weight.grad != None:
+                model.transformer_block_0.causal_block.W_QK.weight.grad[:, :] = 0
+                model.transformer_block_1.causal_block.W_QK.weight.grad[:, :] = 0
 
-        if circuit_num >= 0:
-            out_mask = torch.zeros_like(model.W_O.weight)
-            # out_mask[:L, model.P : model.P + model.D] = 1
-            # out_mask[:L, 3 * model.P + 2 * model.D : 3 * model.P + 3 * model.D] = 1
-            out_mask[
-                :L,
-                circuit_num
-                * (model.P + model.D) : (circuit_num + 1)
-                * (model.P + model.D),
-            ] = 1
-            model.W_O.weight.grad[:, :] = model.W_O.weight.grad * out_mask
+    circuit_num = circuit_num
+    out_mask = torch.zeros_like(model.W_O.weight)
+    # out_mask[:L, model.P : model.P + model.D] = 1
+    # out_mask[:L, 3 * model.P + 2 * model.D : 3 * model.P + 3 * model.D] = 1
+    out_mask[
+        :L,
+        circuit_num * (model.P + model.D) : (circuit_num + 1) * (model.P + model.D),
+    ] = 1
+    model.W_O.weight.grad[:, :] = model.W_O.weight.grad * out_mask
     # pass
     optim.step()
 
@@ -427,6 +437,26 @@ for epoch in range(epochs):
                 "iw_acc": acc_iw,
             }
         )
+
+        if epoch > 6000:
+            stage1 = False
+
+        # if stage1:
+
+        #     ic_accs.append(acc_ic)
+        #     if len(ic_accs) == ic_accs.maxlen:
+        #         # compute absolute differences between adjacent entries
+        #         # diffs = [abs(ic_accs[j] - ic_accs[j-1])
+        #         #          for j in range(1, len(ic_accs))]
+        #         # avg_rate = sum(diffs) / len(diffs)
+
+        #         avg_val = sum(list(ic_accs)) / len(ic_accs)
+        #         print(avg_val)
+
+        #         # 4) test against tolerance
+        #         if avg_val > (float(B)/N):
+        #             print(f"Converged at epoch {epoch}: avg_val={avg_val:.6e}")
+        #             stage1 = False
 
 torch.save(model.state_dict(), model_save_path + f"model_{epoch}")
 

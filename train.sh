@@ -7,4 +7,4 @@
 #SBATCH --output=icl_out/%x-%j.out  # Save stdout to sout directory
 #SBATCH --error=icl_out/%x-%j.err   # Save stderr to sout directory
 
-python3 ./train.py 0.75 0.75 3 0 5
+python3 ./train.py 0.75 0.9 2 0 0
