@@ -522,17 +522,19 @@ class RestrictedDisentangledTransformer(nn.Module):
             # self.transformer_block_0.causal_block.W_QK.weight[P:, P:] = 0
 
             self.transformer_block_0.causal_block.W_QK.weight[:, :] = 0
-            self.transformer_block_1.causal_block.W_QK.weight[:, :] = 0
+            # self.transformer_block_1.causal_block.W_QK.weight[:, :] = 0
 
             self.transformer_block_0.causal_block.W_V.weight[:, :] = torch.eye(P + D)
             self.transformer_block_1.causal_block.W_V.weight[:, :] = torch.eye(
                 (P + D) * 2
             )
 
-            # mask1 = torch.zeros_like(self.transformer_block_1.causal_block.W_QK.weight)
-            # mask1[P : P + D, 2 * P + D :] = torch.eye(D)
+            mask1 = torch.zeros_like(self.transformer_block_1.causal_block.W_QK.weight)
+            mask1[P : P + D, 2 * P + D :] = torch.eye(D)
 
-            # self.transformer_block_1.causal_block.W_QK.weight[:, :] = mask1 * 0.001
+            self.transformer_block_1.causal_block.W_QK.weight[:, :] = mask1 * (
+                1 / D ^ 3
+            )
             # self.transformer_block_1.causal_block.W_QK.weight[:, :] = (
             #     self.transformer_block_1.causal_block.W_QK.weight * mask1
             # )

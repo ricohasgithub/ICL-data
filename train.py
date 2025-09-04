@@ -57,15 +57,15 @@ def plot_grad_flow(named_parameters):
 
 epochs = 150000
 
-K = 1280
-L = 320
+K = 16
+L = 16
 S = 10000
 N = 8
 Nmax = 9
 eps = 0
 
 D = 63
-P = 17
+P = 2 * N + 1
 
 alpha = 0
 
@@ -135,7 +135,9 @@ if not use_mlp:
         model = Transformer(L, mlp=mlp_readout).to(device)
     else:
         # model = DisentangledTransformer(L, mlp=mlp_readout).to(device)
-        model = RestrictedDisentangledTransformer(L, mlp=mlp_readout, circuit_num=circuit_num).to(device)
+        model = RestrictedDisentangledTransformer(
+            L, P=2 * N + 1, mlp=mlp_readout, circuit_num=circuit_num
+        ).to(device)
         print(model)
 else:
 
@@ -255,42 +257,42 @@ for epoch in range(epochs):
         torch.save(model.state_dict(), model_save_path + f"model_{epoch}")
         model_params = model.state_dict()
 
-        if use_disentangled:
-            QK0 = model_params["transformer_block_0.causal_block.W_QK.weight"]
-            QK1 = model_params["transformer_block_1.causal_block.W_QK.weight"]
+        # if use_disentangled:
+        #     QK0 = model_params["transformer_block_0.causal_block.W_QK.weight"]
+        #     QK1 = model_params["transformer_block_1.causal_block.W_QK.weight"]
 
-            W_O = model_params["W_O.weight"]
+        #     W_O = model_params["W_O.weight"]
 
-            vis_attention_weights(
-                QK0.cpu().detach().numpy(),
-                QK1.cpu().detach().numpy(),
-                W_O.cpu().detach().numpy(),
-                P=model.P,
-                D=model.D,
-                # save_dir="./disentangled_model_plots/" + run_path + "/",
-                save_dir="./circuit_plots/" + run_path + "/",
-                model_name=f"model_{epoch}",
-                hyper_params={"p_B": p_B, "p_C": p_C},
-            )
+        #     vis_attention_weights(
+        #         QK0.cpu().detach().numpy(),
+        #         QK1.cpu().detach().numpy(),
+        #         W_O.cpu().detach().numpy(),
+        #         P=model.P,
+        #         D=model.D,
+        #         # save_dir="./disentangled_model_plots/" + run_path + "/",
+        #         save_dir="./circuit_plots/" + run_path + "/",
+        #         model_name=f"model_{epoch}",
+        #         hyper_params={"p_B": p_B, "p_C": p_C},
+        #     )
 
-            plot_wo(
-                W_O.cpu().detach().numpy(),
-                # "./disentangled_model_plots/" + run_path + "/",
-                "./circuit_plots/" + run_path + "/",
-                epoch=epoch,
-            )
+        #     plot_wo(
+        #         W_O.cpu().detach().numpy(),
+        #         # "./disentangled_model_plots/" + run_path + "/",
+        #         "./circuit_plots/" + run_path + "/",
+        #         epoch=epoch,
+        #     )
 
-            svd_attention_weights(
-                QK1.cpu()
-                .detach()
-                .numpy()[model.P : model.P + model.D, 2 * model.P + model.D :],
-                layer=2,
-                save_file_name=f"model_{epoch}",
-                # save_dir="./disentangled_model_plots/" + run_path + "/",
-                save_dir="./circuit_plots/" + run_path + "/",
-                model_name=f"model_{epoch}",
-                hyper_params={"p_B": p_B, "p_C": p_C},
-            )
+        #     svd_attention_weights(
+        #         QK1.cpu()
+        #         .detach()
+        #         .numpy()[model.P : model.P + model.D, 2 * model.P + model.D :],
+        #         layer=2,
+        #         save_file_name=f"model_{epoch}",
+        #         # save_dir="./disentangled_model_plots/" + run_path + "/",
+        #         save_dir="./circuit_plots/" + run_path + "/",
+        #         model_name=f"model_{epoch}",
+        #         hyper_params={"p_B": p_B, "p_C": p_C},
+        #     )
 
     optim.zero_grad()
     inputs_batch, labels_batch, target_classes = generate_input_seqs(
@@ -336,38 +338,48 @@ for epoch in range(epochs):
             model.transformer_block_1.causal_block.W_V.weight.grad[:, :] = 0
 
         mask1 = torch.zeros_like(model.transformer_block_1.causal_block.W_QK.weight)
-        
+
         if block1_num == 0:
             # C^2_{D, D}
             mask1[model.P : model.P + model.D, 2 * model.P + model.D :] = 1
         if block1_num == 1:
             # F^2_{P, P}
-            mask1[model.P + model.D: 2 * model.P + model.D, model.P + model.D: 2 * model.P + model.D] = 1
+            mask1[
+                model.P + model.D : 2 * model.P + model.D,
+                model.P + model.D : 2 * model.P + model.D,
+            ] = 1
         if block1_num == 2:
             # E^2_{P, P}
-            mask1[model.P + model.D: 2 * model.P + model.D, 0: model.P] = 1
+            mask1[model.P + model.D : 2 * model.P + model.D, 0 : model.P] = 1
         if block1_num == 3:
             # F^2_{D, D}
-            mask1[2 * model.P + model.D: , 2 * model.P + model.D:] = 1
+            mask1[2 * model.P + model.D :, 2 * model.P + model.D :] = 1
         if block1_num == 4:
-            mask1[0:model.P, 0:model.P] = 1
-            mask1[model.P+model.D: 2*model.P+model.D, 0:model.P] = 1
-            mask1[model.P+model.D : 2*model.P + model.D, model.P+model.D : 2*model.P + model.D] = 1
+            mask1[0 : model.P, 0 : model.P] = 1
+            mask1[model.P + model.D : 2 * model.P + model.D, 0 : model.P] = 1
+            mask1[
+                model.P + model.D : 2 * model.P + model.D,
+                model.P + model.D : 2 * model.P + model.D,
+            ] = 1
 
         if block1_num in [0, 1, 2, 3, 4]:
             model.transformer_block_1.causal_block.W_QK.weight.grad = (
                 model.transformer_block_1.causal_block.W_QK.weight.grad * mask1
             )
 
-    circuit_num = circuit_num
-    out_mask = torch.zeros_like(model.W_O.weight)
-    # out_mask[:L, model.P : model.P + model.D] = 1
-    # out_mask[:L, 3 * model.P + 2 * model.D : 3 * model.P + 3 * model.D] = 1
-    out_mask[
-        :L,
-        circuit_num * (model.P + model.D) : (circuit_num + 1) * (model.P + model.D),
-    ] = 1
-    model.W_O.weight.grad[:, :] = model.W_O.weight.grad * out_mask
+        circuit_num = circuit_num
+
+        if circuit_num >= 0:
+            out_mask = torch.zeros_like(model.W_O.weight)
+            # out_mask[:L, model.P : model.P + model.D] = 1
+            # out_mask[:L, 3 * model.P + 2 * model.D : 3 * model.P + 3 * model.D] = 1
+            out_mask[
+                :L,
+                circuit_num
+                * (model.P + model.D) : (circuit_num + 1)
+                * (model.P + model.D),
+            ] = 1
+            model.W_O.weight.grad[:, :] = model.W_O.weight.grad * out_mask
     # pass
     optim.step()
 
